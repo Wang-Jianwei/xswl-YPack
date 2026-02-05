@@ -9,10 +9,10 @@ app:
   license: LICENSE.txt
 
 install:
-  install_dir: $PROGRAMFILES64\\${APP_NAME}
+  install_dir: $PROGRAMFILES64\\{app.publisher}\\{app.name}
   create_desktop_shortcut: true
   create_start_menu_shortcut: true
-  registry_key: Software\\${APP_NAME}
+  registry_key: Software\\{app.name}
 
 files:
   # Main executable

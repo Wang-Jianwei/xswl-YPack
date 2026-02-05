@@ -116,14 +116,14 @@ class TestYamlToNsisConverter(unittest.TestCase):
             packages=[
                 PackageEntry(
                     name="app",
-                    sources=[{"source": "app/*", "destination": "$INSTDIR"}],
+                    sources=[{"source": "app/**/*", "destination": "$INSTDIR"}],
                     optional=False,
                     default=True,
                     description="Main Application"
                 ),
                 PackageEntry(
                     name="PXI_driver",
-                    sources=[{"source": "pxi/*", "destination": "$INSTDIR\\drivers\\PXI"}],
+                    sources=[{"source": "pxi/**/*", "destination": "$INSTDIR\\drivers\\PXI"}],
                     optional=True,
                     default=False,
                     description="PXI Driver"
@@ -156,7 +156,7 @@ class TestYamlToNsisConverter(unittest.TestCase):
                 PackageEntry(
                     name="multi",
                     sources=[
-                        {"source": ["a/*", "b/*"], "destination": "$INSTDIR\\data"}
+                        {"source": ["a/**/*", "b/**/*"], "destination": "$INSTDIR\\data"}
                     ],
                     optional=False
                 )

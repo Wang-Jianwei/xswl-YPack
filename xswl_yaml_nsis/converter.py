@@ -81,11 +81,14 @@ class YamlToNsisConverter:
         return path
 
     def _should_use_recursive(self, source: str) -> bool:
-        """Determine if File /r should be used based on the source pattern."""
+        """Determine if File /r should be used based on the source pattern.
+
+        Only treat patterns containing "**" as recursive. Single-level "*" (e.g. "dir/*")
+        is considered non-recursive to follow common glob semantics.
+        """
         if not source:
             return False
-        normalized = self._normalize_path(source)
-        return "**" in source or normalized.endswith("\\*")
+        return "**" in source
     
     def _generate_header(self) -> List[str]:
         """Generate NSIS header section with MUI definitions"""

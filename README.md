@@ -1,4 +1,4 @@
-# xswl-yaml-nsis
+# xswl-YPack
 
 一个轻量级的 Windows 工程打包工具，和 Electron-Builder 类似。
 
@@ -55,8 +55,8 @@ install:
 
 files:
   - "MyApp.exe"
-  - source: "resources/*"
-    recursive: true
+  - source: "resources/**/*"  # Use ** to indicate recursion (recommended)
+    # recursive: true  # Deprecated: use ** in source pattern instead
 ```
 
 ### 2. 生成 NSIS 脚本 / Generate NSIS script
@@ -106,6 +106,14 @@ install:
 
 ### 文件配置 / Files Configuration
 
+> 说明：从 v0.x 起，**仅当 source 模式包含 `**`（例如 `dir/**/*`）时，转换器会把该条目视为递归（生成 `File /r`）。**
+> 
+> - `dir/*` 仅匹配当前目录的直接子项（非递归）。
+> - `dir/**/*` 会递归匹配所有子目录和文件（生成 `File /r`）。
+> - `recursive` 字段仍然兼容但已不推荐使用；建议使用 `**` 明确表达递归意图。
+
+
+
 ```yaml
 files:
   # 简单文件 / Simple file
@@ -117,9 +125,9 @@ files:
     recursive: false
   
   # 递归目录 / Recursive directory
-  - source: "resources/*"
+  - source: "resources/**/*"  # recursive: use ** for recursion (matches all subdirs and files)
     destination: "$INSTDIR\\resources"
-    recursive: true
+    # recursive: true  # deprecated: prefer using ** in source pattern
 ```
 
 ### 代码签名 / Code Signing (可选 / Optional)
