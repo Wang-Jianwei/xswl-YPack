@@ -1,0 +1,21 @@
+app:
+  name: "ExampleApp"
+  version: "1.0.0"
+
+install:
+  install_dir: "$PROGRAMFILES64\\ExampleApp"
+  create_desktop_shortcut: true
+  file_associations:
+    - extension: ".foo"
+      prog_id: "ExampleApp.File"
+      description: "Example Foo File"
+      application: "$INSTDIR\\ExampleApp.exe"
+      default_icon: "$INSTDIR\\icons\\foo.ico"
+      verbs:
+        open: "$INSTDIR\\ExampleApp.exe \"%1\""
+      register_for_all_users: false  # per-user registration (HKCU\\Software\\Classes)
+
+files:
+  - "ExampleApp.exe"
+  - source: "icons/foo.ico"
+    destination: "$INSTDIR\\icons"

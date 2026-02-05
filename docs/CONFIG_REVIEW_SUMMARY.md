@@ -147,16 +147,23 @@ languages:
 
 ### Phase 3 - 系统要求、日志、文件关联、下载
 
-- [ ] 创建 `SystemRequirements` 数据类
-- [ ] 创建 `LoggingConfig` 数据类
-- [ ] 创建 `FileAssociation` 数据类
-- [ ] 扩展 `FileEntry`：
+- [x] 创建 `SystemRequirements` 数据类
+- [x] 创建 `LoggingConfig` 数据类
+- [x] 创建 `FileAssociation` 数据类
+- [x] 扩展 `FileEntry`：
   - `download_url: str`
   - `checksum_type: str`
   - `checksum_value: str`
   - `decompress: bool`
-- [ ] 更新所有解析函数
-- [ ] 单元测试
+- [x] 更新所有解析函数
+- [x] 单元测试
+
+说明：
+
+- `SystemRequirements`：支持 `min_windows_version`、`min_free_space_mb`、`min_ram_mb` 与 `require_admin`，可在安装前做基础检查（当前仅作为配置与占位，后续可把检查逻辑加入安装脚本）。
+- `LoggingConfig`：用于记录安装过程的日志路径和日志级别（已解析为 `PackageConfig.logging`，可用于未来在安装器中启用日志写入）。
+- `FileAssociation`：支持完整注册（写入 `ProgID` 描述、`DefaultIcon`、verbs 命令）并区分 system (`HKCR`) 与 per-user (`HKCU\\Software\\Classes`) 注册。卸载时会删除对应键。
+- `FileEntry` 扩展：增加 `download_url`、`checksum_type`/`checksum_value` 与 `decompress` 字段；转换器会在生成的 NSIS 脚本中对这些字段添加说明性注释（后续可以集成实际下载/校验/解压实现）。
 
 ---
 

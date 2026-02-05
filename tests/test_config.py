@@ -187,6 +187,48 @@ class TestPackageConfig(unittest.TestCase):
         self.assertTrue(ev.remove_on_uninstall)
         self.assertFalse(ev.append)
 
+    def test_fileentry_download_and_checksum(self):
+        """Test FileEntry parsing of download/checksum/decompress fields"""
+        data = self.test_yaml.copy()
+        data["files"] = [
+            {"source": "remote.bin", "download_url": "https://example.com/remote.bin", "checksum_type": "sha256", "checksum_value": "abcd", "decompress": True}
+        ]
+        config = PackageConfig.from_dict(data)
+        self.assertEqual(len(config.files), 1)
+        fe = config.files[0]
+        self.assertEqual(fe.source, "remote.bin")
+        self.assertEqual(fe.download_url, "https://example.com/remote.bin")
+        self.assertEqual(fe.checksum_type, "sha256")
+        self.assertEqual(fe.checksum_value, "abcd")
+        self.assertTrue(fe.decompress)
+
+    def test_system_requirements_and_file_association(self):
+        """Test parsing of system_requirements and file_associations in install config"""
+        data = self.test_yaml.copy()
+        data["install"] = data.get("install", {})
+        data["install"]["system_requirements"] = {"min_windows_version": "10.0", "min_free_space_mb": 1024, "min_ram_mb": 2048, "require_admin": True}
+        data["install"]["file_associations"] = [
+            {"extension": ".foo", "prog_id": "FooApp.File", "description": "Foo File", "application": "$INSTDIR\\Foo.exe", "default_icon": "$INSTDIR\\icons\\foo.ico", "verbs": {"open": "$INSTDIR\\Foo.exe \"%1\""}, "register_for_all_users": True}
+        ]
+        data["logging"] = {"enabled": True, "path": "C:\\logs", "level": "DEBUG"}
+        config = PackageConfig.from_dict(data)
+        # System requirements
+        self.assertIsNotNone(config.install.system_requirements)
+        self.assertEqual(config.install.system_requirements.min_windows_version, "10.0")
+        self.assertEqual(config.install.system_requirements.min_free_space_mb, 1024)
+        self.assertTrue(config.install.system_requirements.require_admin)
+        # File association
+        self.assertEqual(len(config.install.file_associations), 1)
+        fa = config.install.file_associations[0]
+        self.assertEqual(fa.extension, ".foo")
+        self.assertEqual(fa.prog_id, "FooApp.File")
+        self.assertEqual(fa.application, "$INSTDIR\\Foo.exe")
+        # Logging config
+        self.assertIsNotNone(config.logging)
+        self.assertTrue(config.logging.enabled)
+        self.assertEqual(config.logging.path, "C:\\logs")
+        self.assertEqual(config.logging.level, "DEBUG")
+
 
 if __name__ == '__main__':
     unittest.main()

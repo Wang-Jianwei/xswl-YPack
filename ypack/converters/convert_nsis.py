@@ -326,6 +326,13 @@ class YamlToNsisConverter(BaseConverter):
         # Add files
         for file_entry in self.config.files:
             normalized_source = self._normalize_path(file_entry.source)
+            # If file comes from a download URL or has checksum info, emit explanatory comments
+            if getattr(file_entry, 'download_url', None):
+                lines.append(f'  ; Download URL: {file_entry.download_url}')
+                if getattr(file_entry, 'checksum_type', None):
+                    lines.append(f'  ; Checksum: {file_entry.checksum_type} {file_entry.checksum_value}')
+                if getattr(file_entry, 'decompress', False):
+                    lines.append(f'  ; Note: decompression requested (decompress=True)')
             if self._should_use_recursive(file_entry.source):
                 lines.append(f'  File /r "{normalized_source}"')
             else:
@@ -441,6 +448,39 @@ class YamlToNsisConverter(BaseConverter):
                 "",
             ])
 
+        # File associations (supports system or per-user registration)
+        for fa in getattr(self.config.install, 'file_associations', []):
+            lines.append(f'  ; File association: {fa.extension} -> {fa.application} (progid: {fa.prog_id})')
+            # Determine hive and key prefix (HKCR for system, HKCU\Software\Classes for per-user)
+            if getattr(fa, 'register_for_all_users', True):
+                hive = 'HKCR'
+                key_prefix = ''
+            else:
+                hive = 'HKCU'
+                key_prefix = 'Software\\Classes\\'
+
+            # Associate extension to prog_id
+            lines.append(f'  WriteRegStr {hive} "{key_prefix}{fa.extension}" "" "{fa.prog_id}"')
+
+            # ProgID base (description)
+            if fa.prog_id:
+                lines.append(f'  WriteRegStr {hive} "{key_prefix}{fa.prog_id}" "" "{fa.description}"')
+
+            # Default icon
+            if getattr(fa, 'default_icon', None):
+                lines.append(f'  WriteRegStr {hive} "{key_prefix}{fa.prog_id}\\DefaultIcon" "" "{fa.default_icon}"')
+
+            # Verbs (e.g., open, edit)
+            verbs = getattr(fa, 'verbs', {}) or {}
+            if verbs:
+                for verb_name, cmd in verbs.items():
+                    lines.append(f'  WriteRegStr {hive} "{key_prefix}{fa.prog_id}\\Shell\\{verb_name}\\Command" "" "{cmd}"')
+            else:
+                # Default open verb if application provided
+                if getattr(fa, 'application', None):
+                    cmd = f'{fa.application} "%1"'
+                    lines.append(f'  WriteRegStr {hive} "{key_prefix}{fa.prog_id}\\Shell\\Open\\Command" "" "{cmd}"')
+            lines.append("")
         lines.append("SectionEnd")
         lines.append("")
 
@@ -505,6 +545,19 @@ class YamlToNsisConverter(BaseConverter):
             if entry.view in ("32", "64"):
                 lines.append(f'  SetRegView {entry.view}')
             lines.append(f'  DeleteRegValue {entry.hive} "{entry.key}" "{entry.name}"')
+
+        # Remove file associations
+        for fa in getattr(self.config.install, 'file_associations', []):
+            lines.append(f'  ; Remove file association for {fa.extension}')
+            if getattr(fa, 'register_for_all_users', True):
+                hive = 'HKCR'
+                key_prefix = ''
+            else:
+                hive = 'HKCU'
+                key_prefix = 'Software\\Classes\\'
+            lines.append(f'  DeleteRegKey {hive} "{key_prefix}{fa.extension}"')
+            if fa.prog_id:
+                lines.append(f'  DeleteRegKey {hive} "{key_prefix}{fa.prog_id}"')
 
         # Remove environment variables defined in config (if requested)
         for env in getattr(self.config.install, 'env_vars', []):

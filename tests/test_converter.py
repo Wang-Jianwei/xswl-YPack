@@ -275,6 +275,25 @@ class TestYamlToNsisConverter(unittest.TestCase):
         self.assertIn('SectionGroup "Drivers"', script)
         self.assertIn('Section "PXI_driver"', script)
 
+    def test_remote_file_and_file_association_emitted(self):
+        """Remote file with download/checksum and file association should emit explanatory lines"""
+        from ypack.config import FileEntry, FileAssociation
+        config = self.simple_config
+        config.files = [FileEntry(source="remote.bin", download_url="https://example.com/remote.bin", checksum_type="sha256", checksum_value="abcd", decompress=True)]
+        config.install.file_associations = [FileAssociation(extension=".foo", prog_id="Foo.File", description="Foo File", application="$INSTDIR\\Foo.exe", default_icon="$INSTDIR\\icons\\foo.ico", verbs={"open": "$INSTDIR\\Foo.exe \"%1\""})]
+        script = YamlToNsisConverter(config).convert()
+        # Installer should include comment about download and checksum
+        self.assertIn('remote.bin', script)
+        self.assertIn('https://example.com/remote.bin', script)
+        self.assertIn('sha256', script)
+        # File association registration should appear
+        self.assertIn('File association: .foo -> $INSTDIR\\Foo.exe', script)
+        self.assertIn('WriteRegStr HKCR ".foo" "" "Foo.File"', script)
+        self.assertIn('WriteRegStr HKCR "Foo.File\\DefaultIcon" "" "$INSTDIR\\icons\\foo.ico"', script)
+        self.assertIn('WriteRegStr HKCR "Foo.File\\Shell\\open\\Command" "" "$INSTDIR\\Foo.exe "%1""', script)
+        # Uninstaller should remove keys
+        self.assertIn('DeleteRegKey HKCR ".foo"', script)
+
     def test_package_post_install_commands(self):
         """Test post-install commands are emitted for package sections"""
         config = PackageConfig(

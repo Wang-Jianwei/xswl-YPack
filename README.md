@@ -198,6 +198,43 @@ files:
     # recursive: true  # deprecated: prefer using ** in source pattern
 ```
 
+### 文件关联 / File Associations
+
+安装器可以在安装/卸载时为指定文件扩展名注册 ProgID（支持系统范围或当前用户范围）。
+
+示例：
+
+```yaml
+install:
+  file_associations:
+    - extension: ".foo"
+      prog_id: "FooApp.File"
+      description: "Foo File"
+      application: "$INSTDIR\\Foo.exe"
+      default_icon: "$INSTDIR\\icons\\foo.ico"
+      verbs:
+        open: "$INSTDIR\\Foo.exe \"%1\""
+      register_for_all_users: true  # true -> HKCR (system), false -> HKCU\\Software\\Classes (per-user)
+```
+
+说明：
+
+更多示例见 `examples/` 目录：
+
+- `examples/file_association_user.yaml` — per-user 文件关联示例（使用 HKCU\\Software\\Classes）
+- `examples/update_registry_user.yaml` — per-user 更新元数据示例（写入 HKCU）
+
+
+
+- `extension`：要关联的文件扩展名（包含点号），例如 `.foo`。
+- `prog_id`：程序标识符（用于在注册表中建立映射）。
+- `application`：打开该文件的命令（可以包含 `%1` 占位符）。
+- `default_icon`：可选，程序图标的路径（写入 `DefaultIcon` 键）。
+- `verbs`：可选的动词映射（如 `open`, `edit`），键为动词名，值为命令字符串。
+- `register_for_all_users`：若为 `true`，注册在系统范围（HKCR），需要管理员；若为 `false`，注册到 `HKCU\Software\Classes`（无需管理员）。
+
+安装器会在卸载阶段删除对应的注册表键以还原文件关联。
+
 ### 代码签名 / Code Signing (可选 / Optional)
 
 ```yaml

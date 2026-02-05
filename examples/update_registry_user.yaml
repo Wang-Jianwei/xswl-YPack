@@ -1,0 +1,18 @@
+app:
+  name: "UpdaterApp"
+  version: "2.0.0"
+
+install:
+  install_dir: "$PROGRAMFILES64\\UpdaterApp"
+  update:
+    enabled: true
+    update_url: "https://updates.example.com/meta.json"
+    download_url: "https://downloads.example.com/updater-latest.exe"
+    backup_on_upgrade: true
+    repair_enabled: true
+    check_on_startup: true
+    registry_hive: "HKCU"                     # write per-user update metadata (no admin required)
+    registry_key: "Software\\UpdaterCompany\\UpdaterApp"
+
+files:
+  - "UpdaterApp.exe"
