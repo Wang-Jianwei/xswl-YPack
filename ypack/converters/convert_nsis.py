@@ -15,52 +15,8 @@ class YamlToNsisConverter(BaseConverter):
 
     tool_name = "nsis"
 
-    def __init__(self, config: PackageConfig):
-        super().__init__(config)
-
-    def _replace_variables(self, text: str) -> str:
-        """Replace variable placeholders with actual values"""
-        replacements = {
-            "${APP_NAME}": self.config.app.name,
-            "${APP_VERSION}": self.config.app.version,
-            "${APP_PUBLISHER}": self.config.app.publisher,
-        }
-        for var, value in replacements.items():
-            text = text.replace(var, value)
-        return text
-
-    def _interpolate_yaml_placeholders(self, text: str) -> str:
-        """Replace YAML placeholders with config values dynamically.
-
-        Supports placeholders like {app_name}, {app.name}, {install.install_dir}, etc.
-        Searches for patterns {key} or {object.attribute.nested} and resolves from config.
-
-        Args:
-            text: Text with {placeholder} style placeholders
-
-        Returns:
-            Text with placeholders replaced by actual values
-        """
-        if not text:
-            return text
-
-        # Find all {placeholder} patterns
-        pattern = r'\{([^}]+)\}'
-
-        def replace_placeholder(match):
-            placeholder = match.group(1)
-            try:
-                # Try to get value from config using dot notation
-                obj = self.config
-                for attr in placeholder.split('.'):
-                    obj = getattr(obj, attr, None)
-                    if obj is None:
-                        return match.group(0)  # Return original if not found
-                return str(obj) if obj is not None else match.group(0)
-            except (AttributeError, TypeError):
-                return match.group(0)  # Return original if error
-
-        return re.sub(pattern, replace_placeholder, text)
+    def __init__(self, config: PackageConfig, raw_config: dict = None):
+        super().__init__(config, raw_config or getattr(config, '_raw_dict', {}))
 
     def _normalize_path(self, path: str) -> str:
         """Convert Python-style paths to NSIS-compatible Windows paths.
@@ -259,7 +215,7 @@ class YamlToNsisConverter(BaseConverter):
             "; General Settings",
             f'Name "${{APP_NAME}}"',
             f'OutFile "${{APP_NAME}}-${{APP_VERSION}}-Setup.exe"',
-            f'InstallDir "{self._interpolate_yaml_placeholders(self.config.install.install_dir)}"',
+            f'InstallDir "{self.resolve_variables(self.config.install.install_dir)}"',
             'InstallDirRegKey HKLM "${REG_KEY}" "InstallPath"',
             'RequestExecutionLevel admin',
         ]
@@ -283,7 +239,7 @@ class YamlToNsisConverter(BaseConverter):
             lines.append('LogSet on')
             if getattr(self.config.logging, 'path', None):
                 # Define a LOG_FILE macro for consumers/tests
-                lines.append(f'!define LOG_FILE "{self._interpolate_yaml_placeholders(self.config.logging.path)}"')
+                lines.append(f'!define LOG_FILE "{self.resolve_variables(self.config.logging.path)}"')
             lines.append("")
         else:
             lines.append("")
@@ -324,7 +280,7 @@ class YamlToNsisConverter(BaseConverter):
 
         # Finish page run checkbox (MUI_FINISHPAGE_RUN)
         if getattr(self.config.install, 'launch_on_finish', None):
-            path = self._interpolate_yaml_placeholders(self.config.install.launch_on_finish)
+            path = self.resolve_variables(self.config.install.launch_on_finish)
             lines.append(f'!define MUI_FINISHPAGE_RUN "{path}"')
             label = getattr(self.config.install, 'launch_on_finish_label', '')
             if label:
@@ -411,23 +367,24 @@ class YamlToNsisConverter(BaseConverter):
             lines.append('  ; ============================================================')
         for entry in self.config.install.registry_entries:
             # interpolate YAML placeholders if present
-            value = self._interpolate_yaml_placeholders(entry.value)
+            key = self.resolve_variables(entry.key)
+            value = self.resolve_variables(entry.value)
             # Handle registry view if specified
             if entry.view in ("32", "64"):
                 lines.append(f'  SetRegView {entry.view}')
             if entry.type == "string":
-                lines.append(f'  WriteRegStr {entry.hive} "{entry.key}" "{entry.name}" "{value}"')
+                lines.append(f'  WriteRegStr {entry.hive} "{key}" "{entry.name}" "{value}"')
             elif entry.type == "expand":
-                lines.append(f'  WriteRegExpandStr {entry.hive} "{entry.key}" "{entry.name}" "{value}"')
+                lines.append(f'  WriteRegExpandStr {entry.hive} "{key}" "{entry.name}" "{value}"')
             elif entry.type == "dword":
                 # dword value should be numeric
-                lines.append(f'  WriteRegDWORD {entry.hive} "{entry.key}" "{entry.name}" {value}')
+                lines.append(f'  WriteRegDWORD {entry.hive} "{key}" "{entry.name}" {value}')
             else:
                 lines.append(f'  ; Unsupported registry type: {entry.type} for {entry.name}')
 
         # Environment variables
         for env in getattr(self.config.install, 'env_vars', []):
-            env_value = self._interpolate_yaml_placeholders(env.value)
+            env_value = self.resolve_variables(env.value)
             scope = (env.scope or "system").lower()
             if scope == 'system':
                 hive = 'HKLM'
@@ -541,7 +498,7 @@ class YamlToNsisConverter(BaseConverter):
             lines.append(f'  ; Uninstaller logging enabled: path={self.config.logging.path or "$APPDATA\\${APP_NAME}\\uninstall.log"} level={self.config.logging.level}')
             lines.append('  LogSet on')
             if getattr(self.config.logging, 'path', None):
-                lines.append(f'  ; LOG_FILE defined: {self._interpolate_yaml_placeholders(self.config.logging.path)}')
+                lines.append(f'  ; LOG_FILE defined: {self.resolve_variables(self.config.logging.path)}')
             lines.append('')
 
         # Remove files from regular files list (in reverse order)
@@ -591,9 +548,10 @@ class YamlToNsisConverter(BaseConverter):
 
         # Remove custom registry values defined in config
         for entry in self.config.install.registry_entries:
+            key = self.resolve_variables(entry.key)
             if entry.view in ("32", "64"):
                 lines.append(f'  SetRegView {entry.view}')
-            lines.append(f'  DeleteRegValue {entry.hive} "{entry.key}" "{entry.name}"')
+            lines.append(f'  DeleteRegValue {entry.hive} "{key}" "{entry.name}"')
 
         # Remove file associations
         for fa in getattr(self.config.install, 'file_associations', []):
@@ -623,7 +581,7 @@ class YamlToNsisConverter(BaseConverter):
             # If PATH and append was used, call helper to remove the exact entry; otherwise delete value
             if getattr(env, 'append', False) and env.name.upper() == 'PATH':
                 lines.append(f'  ReadRegStr $0 {hive} "{key}" "{env.name}"')
-                lines.append(f'  StrCpy $1 "{self._interpolate_yaml_placeholders(env.value)}"')
+                lines.append(f'  StrCpy $1 "{self.resolve_variables(env.value)}"')
                 lines.append('  ; Remove the exact entry (if present)')
                 lines.append('  StrCpy $0 ";$0;"')
                 lines.append('  StrCpy $1 ";$1;"')
@@ -867,14 +825,21 @@ class YamlToNsisConverter(BaseConverter):
         return flat
 
     def _generate_custom_includes(self) -> List[str]:
-        """Generate custom NSIS includes"""
-        if not self.config.custom_nsis_includes:
+        """Generate custom NSIS includes.
+
+        Uses `custom_includes['nsis']` mapping only.
+        """
+        includes = []
+        if isinstance(self.config.custom_includes, dict):
+            includes = list(self.config.custom_includes.get('nsis', []))
+
+        if not includes:
             return []
 
         lines = [
             "; Custom NSIS Includes",
         ]
-        for include_file in self.config.custom_nsis_includes:
+        for include_file in includes:
             lines.append(f'!include "{include_file}"')
         lines.append("")
 

@@ -358,7 +358,9 @@ class PackageConfig:
     update: Optional[UpdateConfig] = None
     logging: Optional[LoggingConfig] = None
     languages: List[str] = field(default_factory=lambda: ["English"])
-    custom_nsis_includes: List[str] = field(default_factory=list)
+    # Generic tool-specific includes mapping (e.g., {"nsis": ["a.nsh"], "wix": [...]} )
+    custom_includes: Dict[str, List[str]] = field(default_factory=dict)
+    _raw_dict: Dict[str, Any] = field(default_factory=dict, repr=False)  # Store raw YAML for variable resolution
 
     @classmethod
     def from_yaml(cls, yaml_path: str) -> "PackageConfig":
@@ -366,7 +368,7 @@ class PackageConfig:
         with open(yaml_path, 'r', encoding='utf-8') as f:
             data = yaml.safe_load(f)
 
-        return cls(
+        config = cls(
             app=AppInfo.from_dict(data.get("app", {})),
             install=InstallConfig.from_dict(data.get("install", {})),
             files=[FileEntry.from_dict(f) for f in data.get("files", [])],
@@ -379,8 +381,10 @@ class PackageConfig:
             logging=LoggingConfig.from_dict(
                 data["logging"]) if "logging" in data else None,
             languages=data.get("languages", ["English"]),
-            custom_nsis_includes=data.get("custom_nsis_includes", [])
+            custom_includes=data.get("custom_includes", {}),
+            _raw_dict=data  # Store raw dict for variable resolution
         )
+        return config
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "PackageConfig":
@@ -398,5 +402,5 @@ class PackageConfig:
             logging=LoggingConfig.from_dict(
                 data["logging"]) if "logging" in data else None,
             languages=data.get("languages", ["English"]),
-            custom_nsis_includes=data.get("custom_nsis_includes", [])
+            custom_includes=data.get("custom_includes", {})
         )

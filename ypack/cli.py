@@ -70,7 +70,7 @@ def main():
         if args.format == "nsis":
             if args.verbose:
                 print("Converting YAML to NSIS script...")
-            converter = YamlToNsisConverter(config)
+            converter = YamlToNsisConverter(config, config._raw_dict)
         elif args.format == "wix":
             print("Error: 'wix' format is not supported yet. Coming soon.", file=sys.stderr)
             sys.exit(1)

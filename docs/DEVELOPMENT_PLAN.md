@@ -56,7 +56,7 @@
 | `RegistryEntry` | hive, key, name, value, type, view | 5, 6, 9, 12, 14 | [L37-L52](../ypack/config.py#L37-L52) |
 | `PackageEntry` | name, sources, recursive, optional, default, description, children, **post_install** | 1, 3, 6, 14, 16 | [L94-L180](../ypack/config.py#L94-L180) |
 | `SigningConfig` | enabled, certificate, password, timestamp_url | 19 | [L193-L206](../ypack/config.py#L193-L206) |
-| `custom_nsis_includes` | 字符串列表 | 19 | [L227](../ypack/config.py#L227) |
+| `custom_includes` | 字典（按工具分组） | 19 | [L361](../ypack/config.py#L361) |
 
 **关键发现**:
 - ✅ 项目 **16（安装后自动运行）** 实际已通过 `PackageEntry.post_install` 支持，转换器已生成 `ExecWait` 指令
@@ -338,13 +338,13 @@ ExecWait "PowerShell -ExecutionPolicy Bypass -File \"$INSTDIR\setup_script.ps1\"
 
 ### 19. ✅ 自定义界面（品牌化支持）
 
-**实现方式**: `app.icon` + `custom_nsis_includes`  
+**实现方式**: `app.icon` + `custom_includes`  
 **相关代码**:
 
 - [ypack/config.py](../ypack/config.py#L22) - `icon` 字段
 - [ypack/converters/convert_nsis.py](../ypack/converters/convert_nsis.py#L113-L128) - 图标定义
-- [ypack/converters/convert_nsis.py](../ypack/converters/convert_nsis.py#L517-L525) - 自定义 include 处理
-- [ypack/config.py](../ypack/config.py#L227) - `custom_nsis_includes` 列表
+- [ypack/converters/convert_nsis.py](../ypack/converters/convert_nsis.py#L800-L838) - 自定义 include 处理
+- [ypack/config.py](../ypack/config.py#L361) - `custom_includes`
 
 **使用示例**:
 
@@ -352,15 +352,16 @@ ExecWait "PowerShell -ExecutionPolicy Bypass -File \"$INSTDIR\setup_script.ps1\"
 app:
   icon: "assets/myapp.ico"  # 程序和卸载程序的图标
 
-custom_nsis_includes:
-  - "custom_pages.nsh"      # 添加自定义页面
-  - "custom_functions.nsh"  # 添加自定义函数/样式
+custom_includes:
+  nsis:
+    - "custom_pages.nsh"
+    - "custom_functions.nsh"
 ```
 
 **特点**:
 
 - 图标用于安装向导和卸载程序
-- `custom_nsis_includes` 可以插入任意 NSIS 脚本进行深度定制（颜色、字体、页面序列等）
+- `custom_includes` 允许为不同目标工具注入不同的 include 列表（例如 `nsis` / `wix`）
 
 **状态**: ✅ 生产就绪（含自定义扩展点）
 

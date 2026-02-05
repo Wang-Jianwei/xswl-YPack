@@ -22,7 +22,17 @@ class TestYamlToNsisConverter(unittest.TestCase):
             install=InstallConfig(),
             files=[
                 FileEntry(source="test.exe")
-            ]
+            ],
+            _raw_dict={
+                "app": {
+                    "name": "TestApp",
+                    "version": "1.0.0",
+                    "publisher": "Test Publisher",
+                    "description": "Test description"
+                },
+                "install": {},
+                "files": [{"source": "test.exe"}]
+            }
         )
     
     def test_converter_initialization(self):
@@ -50,8 +60,8 @@ class TestYamlToNsisConverter(unittest.TestCase):
     
     def test_variable_replacement(self):
         """Test variable replacement in strings"""
-        converter = YamlToNsisConverter(self.simple_config)
-        result = converter._replace_variables("$PROGRAMFILES64\\${APP_NAME}")
+        converter = YamlToNsisConverter(self.simple_config, self.simple_config._raw_dict)
+        result = converter.resolve_variables("$PROGRAMFILES64\\${app.name}")
         self.assertEqual(result, "$PROGRAMFILES64\\TestApp")
     
     def test_installer_section_with_files(self):

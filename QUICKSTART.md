@@ -142,7 +142,7 @@ update:
 ### Custom NSIS Includes
 
 ```yaml
-custom_nsis_includes:
+custom_includes:
   - custom_functions.nsh
   - extra_pages.nsh
 ```

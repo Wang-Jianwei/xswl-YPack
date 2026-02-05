@@ -82,6 +82,11 @@ xswl-ypack installer.yaml --build --makensis "C:\Program Files\NSIS\makensis.exe
 
 ## 配置选项 / Configuration Options
 
+### 变量 / Variables
+
+- 有关变量系统（内置变量、配置引用与自定义变量）的完整说明，请参阅：`docs/VARIABLES.md`（包含语法、示例与内置变量表）。
+
+
 ### 应用信息 / Application Information
 
 ```yaml
@@ -268,12 +273,15 @@ update:
 - `repair_enabled`：若为 `true`，安装器会在注册表写入相应标志，应用或用户可使用此标志触发修复流程。
 - `registry_hive` / `registry_key`：可配置在安装时写入更新元数据的注册表位置。默认写入 `HKLM ${REG_KEY}`，若设置为 `HKCU` 则会写入当前用户范围（无需管理员权限）。
 
-### 自定义 NSIS 脚本 / Custom NSIS Includes (可选 / Optional)
+### 自定义脚本 / Custom Includes (可选 / Optional)
+
+首选写法（按目标分组）：
 
 ```yaml
-custom_nsis_includes:
-  - "custom_functions.nsh"
-  - "extra_pages.nsh"
+custom_includes:
+  nsis:
+    - "custom_functions.nsh"
+    - "extra_pages.nsh"
 ```
 
 ## 国际化 / Languages

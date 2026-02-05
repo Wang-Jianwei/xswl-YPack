@@ -65,7 +65,7 @@ flowchart LR
 
 ## 扩展点与注意事项 ⚙️
 
-- 自定义 NSIS 片段：通过 `custom_nsis_includes` 可以注入自定义 `!include` 文件来扩展功能。
+- 自定义 NSIS 片段：通过 `custom_includes.nsis` 可以注入自定义 `!include` 文件来扩展功能。
 - 文件模式与递归：转换器遵循常见 glob 语义 —— 仅当源路径包含 `**`（例如 `dir/**/*`）时会使用递归拷贝（生成 `File /r`）。单层 `dir/*` 为非递归。若需要把源目录当作一个根文件夹复制到目标下（例如将 `/a/b/c` 拷贝为 `/m/n/c/...`），可以在 `FileEntry` 或 `packages` 源中使用 `preserve_root: true`。
 - post_install：包级 `post_install` 命令会在对应包的 Section 中以 `ExecWait` 的形式执行，适合像驱动安装之类的后置步骤。示例：
 

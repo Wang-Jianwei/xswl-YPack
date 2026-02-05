@@ -30,7 +30,7 @@
 | 14 | 配置文件生成 | `files`, `packages[].post_install` | ✅ 支持脚本 |
 | 15 | 日志记录 | `logging` | ✅ 支持（`LogSet`） |
 | 16 | 安装后自动运行 | `packages[].post_install` | ✅ 通过 ExecWait |
-| 19 | 自定义界面 | `app.icon`, `custom_nsis_includes` | ✅ 支持品牌化 |
+| 19 | 自定义界面 | `app.icon`, `custom_includes` | ✅ 支持品牌化 |
 
 ---
 

@@ -38,6 +38,8 @@ update:
   update_url: "https://example.com/api/updates/latest"
   check_on_startup: true
 
-custom_nsis_includes:
-  - "includes/custom_dialogs.nsh"
-  - "includes/advanced_functions.nsh"
+custom_includes:
+  nsis:
+    - "includes/custom_dialogs.nsh"
+    - "includes/advanced_functions.nsh"
+

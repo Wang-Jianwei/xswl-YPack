@@ -47,6 +47,6 @@ update:
 
 # Optional: Custom NSIS includes
 # Include additional NSIS scripts for advanced customization
-custom_nsis_includes:
+custom_includes:
   # - "custom_functions.nsh"
   # - "extra_pages.nsh"
