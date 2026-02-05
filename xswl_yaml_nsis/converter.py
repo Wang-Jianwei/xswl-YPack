@@ -262,6 +262,31 @@ class YamlToNsisConverter:
             '  WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "Publisher" "${APP_PUBLISHER}"',
             "",
         ])
+
+        # Custom registry entries from config
+        views_used = set([e.view for e in self.config.install.registry_entries if getattr(e, 'view', 'auto') and e.view != 'auto'])
+        if len(views_used) > 1:
+            views_list = ",".join(sorted(views_used))
+            lines.append('  ; ============================================================')
+            lines.append(f'  ; WARNING: registry entries use multiple SetRegView values: {views_list}')
+            lines.append('  ; Converter will insert SetRegView before each affected entry.')
+            lines.append('  ; Be aware: SetRegView affects subsequent registry operations.')
+            lines.append('  ; ============================================================')
+        for entry in self.config.install.registry_entries:
+            # interpolate YAML placeholders if present
+            value = self._interpolate_yaml_placeholders(entry.value)
+            # Handle registry view if specified
+            if entry.view in ("32", "64"):
+                lines.append(f'  SetRegView {entry.view}')
+            if entry.type == "string":
+                lines.append(f'  WriteRegStr {entry.hive} "{entry.key}" "{entry.name}" "{value}"')
+            elif entry.type == "expand":
+                lines.append(f'  WriteRegExpandStr {entry.hive} "{entry.key}" "{entry.name}" "{value}"')
+            elif entry.type == "dword":
+                # dword value should be numeric
+                lines.append(f'  WriteRegDWORD {entry.hive} "{entry.key}" "{entry.name}" {value}')
+            else:
+                lines.append(f'  ; Unsupported registry type: {entry.type} for {entry.name}')
         
         # Desktop shortcut
         if self.config.install.create_desktop_shortcut:
@@ -338,6 +363,15 @@ class YamlToNsisConverter:
             '  DeleteRegKey HKLM "${REG_KEY}"',
             '  DeleteRegKey HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}"',
             "",
+        ])
+
+        # Remove custom registry values defined in config
+        for entry in self.config.install.registry_entries:
+            if entry.view in ("32", "64"):
+                lines.append(f'  SetRegView {entry.view}')
+            lines.append(f'  DeleteRegValue {entry.hive} "{entry.key}" "{entry.name}"')
+
+        lines.extend([
             "SectionEnd",
             "",
         ])

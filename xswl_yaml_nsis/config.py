@@ -34,20 +34,49 @@ class AppInfo:
 
 
 @dataclass
+class RegistryEntry:
+    """Registry entry configuration for installer/uninstaller"""
+    def __init__(self, hive: str, key: str, name: str, value: str, type: str = "string", view: str = "auto"):
+        self.hive = hive
+        self.key = key
+        self.name = name
+        self.value = value
+        self.type = type  # "string", "expand", "dword"
+        self.view = view  # "auto", "32", "64"
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "RegistryEntry":
+        return cls(
+            hive=data.get("hive", "HKLM"),
+            key=data.get("key", ""),
+            name=data.get("name", ""),
+            value=data.get("value", ""),
+            type=data.get("type", "string"),
+            view=data.get("view", "auto")
+        )
+
+
+@dataclass
 class InstallConfig:
     """Installation configuration"""
     install_dir: str = "$PROGRAMFILES64\\${APP_NAME}"
     create_desktop_shortcut: bool = True
     create_start_menu_shortcut: bool = True
     registry_key: str = "Software\\${APP_NAME}"
+    registry_entries: List[RegistryEntry] = field(default_factory=list)
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "InstallConfig":
+        entries = []
+        for e in data.get("registry_entries", []):
+            if isinstance(e, dict):
+                entries.append(RegistryEntry.from_dict(e))
         return cls(
             install_dir=data.get("install_dir", "$PROGRAMFILES64\\${APP_NAME}"),
             create_desktop_shortcut=data.get("create_desktop_shortcut", True),
             create_start_menu_shortcut=data.get("create_start_menu_shortcut", True),
-            registry_key=data.get("registry_key", "Software\\${APP_NAME}")
+            registry_key=data.get("registry_key", "Software\\${APP_NAME}"),
+            registry_entries=entries,
         )
 
 

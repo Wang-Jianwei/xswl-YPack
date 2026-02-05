@@ -34,6 +34,32 @@ install:
 files:
   - MyApp.exe
   - config.json
+
+# Pattern semantics
+- Use `dir/**/*` to recursively include all files under `dir` and subdirectories.
+- Use `dir/*` to include only direct children of `dir` (non-recursive).
+- To copy an entire directory as a folder under destination (preserve root folder), use `preserve_root: true` on the entry, e.g.:
+
+```yaml
+files:
+  - source: ./a/b/c
+    destination: $INSTDIR\m\n
+    preserve_root: true  # results in $INSTDIR\m\n\c\<files>
+```
+
+# Registry example
+You can write and remove registry values during install/uninstall:
+
+```yaml
+install:
+  registry_entries:
+    - hive: HKLM
+      key: "Software\\MyApp"
+      name: "UpdateURL"
+      value: "https://example.com/updates"
+      type: "string"
+```
+
 ```
 
 ### 2. Generate NSIS script

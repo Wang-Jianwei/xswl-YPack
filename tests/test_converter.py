@@ -219,6 +219,45 @@ class TestYamlToNsisConverter(unittest.TestCase):
 
         self.assertIn('ExecWait "$INSTDIR\\drivers\\install_driver.exe /quiet"', script)
 
+    def test_install_registry_entries(self):
+        """Test custom registry entries are written and removed"""
+        reg_entries = [
+            {
+                "hive": "HKLM",
+                "key": "Software\\TestApp",
+                "name": "UpdateURL",
+                "value": "https://example.com/updates",
+                "type": "string",
+                "view": "64"
+            },
+            {
+                "hive": "HKCU",
+                "key": "Software\\TestApp",
+                "name": "Enabled",
+                "value": "1",
+                "type": "dword",
+                "view": "32"
+            }
+        ]
+        config = PackageConfig(
+            app=AppInfo(name="RegApp", version="1.0.0"),
+            install=InstallConfig.from_dict({"registry_entries": reg_entries}),
+            files=[],
+            packages=[]
+        )
+
+        converter = YamlToNsisConverter(config)
+        script = converter.convert()
+
+        self.assertIn('WriteRegStr HKLM "Software\\TestApp" "UpdateURL" "https://example.com/updates"', script)
+        self.assertIn('WriteRegDWORD HKCU "Software\\TestApp" "Enabled" 1', script)
+        # Check uninstaller deletes values
+        self.assertIn('DeleteRegValue HKLM "Software\\TestApp" "UpdateURL"', script)
+        self.assertIn('DeleteRegValue HKCU "Software\\TestApp" "Enabled"', script)
+        # If multiple views are used, a boxed warning should be present
+        self.assertIn('WARNING: registry entries use multiple SetRegView values', script)
+        self.assertIn('Converter will insert SetRegView before each affected entry', script)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -104,6 +104,39 @@ install:
   registry_key: "Software\\${APP_NAME}"        # 注册表键 / Registry key
 ```
 
+#### 注册表项 / Registry entries
+
+你可以在安装时写入自定义注册表值，并在卸载时自动删除它们。支持三种类型：`string`（WriteRegStr）、`expand`（WriteRegExpandStr）和 `dword`（WriteRegDWORD）。
+
+示例：
+
+```yaml
+install:
+  registry_entries:
+    - hive: HKLM
+      key: "Software\\MyApp"
+      name: "UpdateURL"
+      value: "https://example.com/updates"
+      type: "string"
+      view: "64"
+    - hive: HKCU
+      key: "Software\\MyApp"
+      name: "Enabled"
+      value: "1"
+      type: "dword"
+      view: "32"  # (optional) view: auto|32|64, default auto
+```
+
+生成的安装脚本会在安装阶段写入这些值，卸载阶段会调用 `DeleteRegValue` 删除对应的值。
+
+注意：`SetRegView` 会改变后续的注册表视图（32/64 位）。转换器会在每条有指定 `view` 的条目之前插入对应的 `SetRegView`，以确保写入/删除在预期的注册表视图中执行。
+
+如果在同一配置中混用了多个不同的 `view`（例如既有 `32` 又有 `64`），生成器会在注册表段顶部插入显眼注释提醒：
+
+```
+; Note: registry entries use multiple SetRegView values: 32,64. Converter will insert SetRegView before each affected entry. Be aware SetRegView affects subsequent registry operations.
+```
+
 ### 文件配置 / Files Configuration
 
 > 说明：从 v0.x 起，**仅当 source 模式包含 `**`（例如 `dir/**/*`）时，转换器会把该条目视为递归（生成 `File /r`）。**

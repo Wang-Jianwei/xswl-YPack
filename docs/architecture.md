@@ -66,6 +66,22 @@ flowchart LR
 ## 扩展点与注意事项 ⚙️
 
 - 自定义 NSIS 片段：通过 `custom_nsis_includes` 可以注入自定义 `!include` 文件来扩展功能。
+- 文件模式与递归：转换器遵循常见 glob 语义 —— 仅当源路径包含 `**`（例如 `dir/**/*`）时会使用递归拷贝（生成 `File /r`）。单层 `dir/*` 为非递归。若需要把源目录当作一个根文件夹复制到目标下（例如将 `/a/b/c` 拷贝为 `/m/n/c/...`），可以在 `FileEntry` 或 `packages` 源中使用 `preserve_root: true`。
+- post_install：包级 `post_install` 命令会在对应包的 Section 中以 `ExecWait` 的形式执行，适合像驱动安装之类的后置步骤。示例：
+
+```yaml
+packages:
+  Drivers:
+    children:
+      PXI_driver:
+        sources:
+          - source: "./build/.../PXI/**/*"
+            destination: "$INSTDIR\\drivers\\PXI"
+        post_install:
+          - "$INSTDIR\\drivers\\PXI\\installDriver.cmd"
+```
+
+- 注册表视图：`SetRegView` 会改变后续注册表操作所使用的视图（32/64位）。转换器在生成时会在每条带 `view` 的 `registry_entries` 之前插入相应的 `SetRegView`，并在卸载阶段同样在删除前设置视图，以确保写入和删除操作发生在期望的注册表视图中。
 - 签名：签名配置不会自动执行签名（除非在构建后手动使用 signtool），脚本中会留下 `!finalize` 注释提示。
 - 更新：自动更新逻辑需在应用端实现，安装器只负责写入注册表相关配置供应用读取。
 
