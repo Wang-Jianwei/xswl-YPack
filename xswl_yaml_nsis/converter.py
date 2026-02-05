@@ -79,6 +79,13 @@ class YamlToNsisConverter:
         path = path.replace("/", "\\")
         
         return path
+
+    def _should_use_recursive(self, source: str) -> bool:
+        """Determine if File /r should be used based on the source pattern."""
+        if not source:
+            return False
+        normalized = self._normalize_path(source)
+        return "**" in source or normalized.endswith("\\*")
     
     def _generate_header(self) -> List[str]:
         """Generate NSIS header section with MUI definitions"""
@@ -227,7 +234,7 @@ class YamlToNsisConverter:
         # Add files
         for file_entry in self.config.files:
             normalized_source = self._normalize_path(file_entry.source)
-            if file_entry.recursive:
+            if self._should_use_recursive(file_entry.source):
                 lines.append(f'  File /r "{normalized_source}"')
             else:
                 lines.append(f'  File "{normalized_source}"')
@@ -385,7 +392,7 @@ class YamlToNsisConverter:
                 path_for_nsi = resolved
             else:
                 path_for_nsi = self._normalize_path(s)
-            if pkg_entry.recursive:
+            if self._should_use_recursive(s):
                 return f'  File /r "{path_for_nsi}"'
             return f'  File "{path_for_nsi}"'
 
@@ -401,6 +408,11 @@ class YamlToNsisConverter:
                         lines.append(_make_file_line(pkg_entry, s))
                 else:
                     lines.append(_make_file_line(pkg_entry, source_value))
+            if pkg_entry.post_install:
+                lines.append("")
+                lines.append("  ; Post-install commands")
+                for cmd in pkg_entry.post_install:
+                    lines.append(f'  ExecWait "{cmd}"')
             lines.append("SectionEnd")
             lines.append("")
 

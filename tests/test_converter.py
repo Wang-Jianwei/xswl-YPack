@@ -197,6 +197,28 @@ class TestYamlToNsisConverter(unittest.TestCase):
         self.assertIn('SectionGroup "Drivers"', script)
         self.assertIn('Section "PXI_driver"', script)
 
+    def test_package_post_install_commands(self):
+        """Test post-install commands are emitted for package sections"""
+        config = PackageConfig(
+            app=AppInfo(name="PostInstallApp", version="1.0.0"),
+            install=InstallConfig(),
+            files=[],
+            packages=[
+                PackageEntry(
+                    name="driver",
+                    sources=[{"source": "drv/*", "destination": "$INSTDIR\\drivers"}],
+                    post_install=["$INSTDIR\\drivers\\install_driver.exe /quiet"],
+                    optional=True,
+                    default=False,
+                )
+            ]
+        )
+
+        converter = YamlToNsisConverter(config)
+        script = converter.convert()
+
+        self.assertIn('ExecWait "$INSTDIR\\drivers\\install_driver.exe /quiet"', script)
+
 
 if __name__ == '__main__':
     unittest.main()

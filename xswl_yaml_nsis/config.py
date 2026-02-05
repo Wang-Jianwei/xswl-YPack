@@ -79,6 +79,7 @@ class PackageEntry:
     default: bool = True
     description: str = ""
     children: List["PackageEntry"] = field(default_factory=list)
+    post_install: List[str] = field(default_factory=list)
     
     @classmethod
     def from_dict(cls, name: str, data: Dict[str, Any]) -> "PackageEntry":
@@ -125,6 +126,15 @@ class PackageEntry:
                             "destination": dest
                         })
         
+        # Handle post-install commands
+        post_install_data = data.get("post_install", [])
+        if isinstance(post_install_data, str):
+            post_install_list = [post_install_data]
+        elif isinstance(post_install_data, list):
+            post_install_list = [str(x) for x in post_install_data if x]
+        else:
+            post_install_list = []
+
         return cls(
             name=name,
             sources=sources_list,
@@ -133,6 +143,7 @@ class PackageEntry:
             default=data.get("default", True),
             description=data.get("description", ""),
             children=children_list,
+            post_install=post_install_list,
         )
 
 
