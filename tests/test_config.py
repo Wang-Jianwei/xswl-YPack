@@ -1,12 +1,12 @@
 """
-Unit tests for xswl-yaml-nsis configuration parser
+Unit tests for xswl-YPack configuration parser
 """
 
 import unittest
 import tempfile
 import os
 import yaml
-from xswl_yaml_nsis.config import (
+from ypack.config import (
     AppInfo, InstallConfig, FileEntry, SigningConfig, 
     UpdateConfig, PackageConfig
 )

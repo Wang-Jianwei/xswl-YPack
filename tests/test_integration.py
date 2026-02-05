@@ -1,12 +1,12 @@
 """
-Integration tests for xswl-yaml-nsis
+Integration tests for xswl-YPack
 """
 
 import unittest
 import tempfile
 import os
-from xswl_yaml_nsis.config import PackageConfig
-from xswl_yaml_nsis.converters.convert_nsis import YamlToNsisConverter
+from ypack.config import PackageConfig
+from ypack.converters.convert_nsis import YamlToNsisConverter
 
 
 class TestIntegration(unittest.TestCase):

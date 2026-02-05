@@ -1,5 +1,5 @@
 """
-Test runner for xswl-yaml-nsis
+Test runner for xswl-YPack
 """
 
 import unittest

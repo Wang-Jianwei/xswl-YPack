@@ -4,13 +4,13 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="xswl-yaml-nsis",
+    name="xswl-YPack",
     version="0.1.0",
     author="Wang-Jianwei",
     description="A lightweight Windows packaging tool that converts YAML to NSIS scripts",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/Wang-Jianwei/xswl-yaml-nsis",
+    url="https://github.com/Wang-Jianwei/xswl-YPack",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 3 - Alpha",
@@ -31,7 +31,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "xswl-yaml-nsis=xswl_yaml_nsis.cli:main",
+            "xswl-ypack=ypack.cli:main",
         ],
     },
 )

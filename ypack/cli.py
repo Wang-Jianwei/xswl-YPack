@@ -1,5 +1,5 @@
 """
-Command-line interface for xswl-yaml-nsis
+Command-line interface for xswl-YPack
 """
 
 import argparse
@@ -13,7 +13,7 @@ from .converters import YamlToNsisConverter
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
-        description="xswl-yaml-nsis: Convert YAML configuration to NSIS installer script"
+        description="xswl-ypack: Convert YAML configuration to NSIS installer script"
     )
     parser.add_argument(
         "config",

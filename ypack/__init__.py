@@ -1,5 +1,5 @@
 """
-xswl-yaml-nsis - A lightweight Windows packaging tool
+xswl-YPack - A lightweight Windows packaging tool
 Converts YAML configurations to NSIS scripts for building installers
 """
 

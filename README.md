@@ -24,15 +24,15 @@ YAML Config → Python Converter → NSIS Script → makensis → Windows Instal
 ### 从源码安装 / Install from source
 
 ```bash
-git clone https://github.com/Wang-Jianwei/xswl-yaml-nsis.git
-cd xswl-yaml-nsis
+git clone https://github.com/Wang-Jianwei/xswl-YPack.git
+cd xswl-YPack
 pip install -e .
 ```
 
 ### 使用 pip 安装 / Install with pip
 
 ```bash
-pip install xswl-yaml-nsis
+pip install xswl-ypack
 ```
 
 ## 快速开始 / Quick Start
@@ -62,7 +62,7 @@ files:
 ### 2. 生成 NSIS 脚本 / Generate NSIS script
 
 ```bash
-xswl-yaml-nsis installer.yaml -o installer.nsi
+xswl-ypack installer.yaml -o installer.nsi
 ```
 
 这将生成一个可读的 `installer.nsi` 文件，您可以查看和修改它。
@@ -71,13 +71,13 @@ xswl-yaml-nsis installer.yaml -o installer.nsi
 
 ```bash
 # 仅生成 NSIS 脚本 / Generate NSIS script only
-xswl-yaml-nsis installer.yaml
+xswl-ypack installer.yaml
 
 # 生成脚本并构建安装包 / Generate and build installer
-xswl-yaml-nsis installer.yaml --build
+xswl-ypack installer.yaml --build
 
 # 指定 makensis 路径 / Specify makensis path
-xswl-yaml-nsis installer.yaml --build --makensis "C:\Program Files\NSIS\makensis.exe"
+xswl-ypack installer.yaml --build --makensis "C:\Program Files\NSIS\makensis.exe"
 ```
 
 ## 配置选项 / Configuration Options
@@ -240,28 +240,28 @@ files:
 
 ```bash
 # 查看帮助 / Show help
-xswl-yaml-nsis --help
+xswl-ypack --help
 
 # 生成 NSIS 脚本 / Generate NSIS script (默认格式 nsis)
-xswl-yaml-nsis config.yaml
+xswl-ypack config.yaml
 
 # 指定格式 / Specify format (currently: nsis)
-xswl-yaml-nsis config.yaml --format nsis
+xswl-ypack config.yaml --format nsis
 
 # 指定输出文件 / Specify output file
-xswl-yaml-nsis config.yaml -o custom.nsi
+xswl-ypack config.yaml -o custom.nsi
 
 # 生成并构建 / Generate and build
-xswl-yaml-nsis config.yaml --build
+xswl-ypack config.yaml --build
 
 # 详细输出 / Verbose output
-xswl-yaml-nsis config.yaml -v --build
+xswl-ypack config.yaml -v --build
 ```
 
 ## Python API 使用 / Python API Usage
 
 ```python
-from xswl_yaml_nsis import PackageConfig, YamlToNsisConverter
+from ypack import PackageConfig, YamlToNsisConverter
 
 # 从 YAML 文件加载配置 / Load config from YAML
 config = PackageConfig.from_yaml("installer.yaml")

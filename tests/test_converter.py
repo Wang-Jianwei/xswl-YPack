@@ -1,10 +1,10 @@
 """
-Unit tests for xswl-yaml-nsis NSIS converter
+Unit tests for xswl-YPack NSIS converter
 """
 
 import unittest
-from xswl_yaml_nsis.config import PackageConfig, AppInfo, InstallConfig, FileEntry, PackageEntry
-from xswl_yaml_nsis.converters.convert_nsis import YamlToNsisConverter
+from ypack.config import PackageConfig, AppInfo, InstallConfig, FileEntry, PackageEntry
+from ypack.converters.convert_nsis import YamlToNsisConverter
 
 
 class TestYamlToNsisConverter(unittest.TestCase):

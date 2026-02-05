@@ -11,8 +11,8 @@ from pathlib import Path
 import yaml
 import argparse
 
-from xswl_yaml_nsis.config import PackageConfig
-from xswl_yaml_nsis.converters.convert_nsis import YamlToNsisConverter
+from ypack.config import PackageConfig
+from ypack.converters.convert_nsis import YamlToNsisConverter
 
 
 def find_existing(path_candidates):

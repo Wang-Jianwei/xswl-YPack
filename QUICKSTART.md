@@ -3,14 +3,14 @@
 ## Installation
 
 ```bash
-pip install xswl-yaml-nsis
+pip install xswl-ypack
 ```
 
 Or install from source:
 
 ```bash
-git clone https://github.com/Wang-Jianwei/xswl-yaml-nsis.git
-cd xswl-yaml-nsis
+git clone https://github.com/Wang-Jianwei/xswl-YPack.git
+cd xswl-YPack
 pip install -e .
 ```
 
@@ -65,7 +65,7 @@ install:
 ### 2. Generate NSIS script
 
 ```bash
-xswl-yaml-nsis installer.yaml
+xswl-ypack installer.yaml
 ```
 
 This generates `installer.nsi` in the same directory.
@@ -73,7 +73,7 @@ This generates `installer.nsi` in the same directory.
 ### 3. Build the installer (requires NSIS)
 
 ```bash
-xswl-yaml-nsis installer.yaml --build
+xswl-ypack installer.yaml --build
 ```
 
 This generates both the `.nsi` file and builds `MyApp-1.0.0-Setup.exe`.
