@@ -5,7 +5,7 @@ app:
   version: "1.0.0"
   publisher: My Software Company
   description: A C++ application packaged with NSIS
-  icon: resources/app.ico
+  install_icon: resources/app.ico
   license: LICENSE.txt
 
 install:

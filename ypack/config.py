@@ -19,8 +19,9 @@ class AppInfo:
     version: str            # 版本号
     publisher: str = ""     # 发布者
     description: str = ""   # 应用描述
-    icon: str = ""          # 图标路径
-    license: str = ""       # 许可证路径
+    install_icon: str = ""  # 安装器/快捷方式使用的图标路径
+    uninstall_icon: str = ""# 卸载程序使用的图标路径
+    license: str = ""
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "AppInfo":
@@ -29,7 +30,8 @@ class AppInfo:
             version=data.get("version", "1.0.0"),
             publisher=data.get("publisher", ""),
             description=data.get("description", ""),
-            icon=data.get("icon", ""),
+            install_icon=data.get("install_icon", ""),
+            uninstall_icon=data.get("uninstall_icon", data.get("install_icon", "")),
             license=data.get("license", "")
         )
 

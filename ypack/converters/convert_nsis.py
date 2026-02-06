@@ -66,15 +66,23 @@ class YamlToNsisConverter(BaseConverter):
         ]
 
         # Add MUI icon definitions (must be before MUI2.nsh include)
-        if self.config.app.icon:
-            abs_icon_path = self._resolve_path_relative_to_config(self.config.app.icon)
-            rel_icon_path = self._get_relative_path_for_nsi(abs_icon_path) if os.path.exists(abs_icon_path) else self.config.app.icon
-
+        install_icon = getattr(self.config.app, 'install_icon', '')
+        # Uninstall icon falls back to install icon when not explicitly set
+        uninstall_icon = getattr(self.config.app, 'uninstall_icon', '') or getattr(self.config.app, 'install_icon', '')
+        if install_icon or uninstall_icon:
             lines.append("; Modern UI Icons")
-            if not os.path.exists(abs_icon_path):
-                lines.append(f"; Warning: Icon file not found: {self.config.app.icon}")
-            lines.append(f'!define MUI_ICON "{rel_icon_path}"')
-            lines.append(f'!define MUI_UNICON "{rel_icon_path}"')
+            if install_icon:
+                abs_install = self._resolve_path_relative_to_config(install_icon)
+                rel_install = self._get_relative_path_for_nsi(abs_install) if os.path.exists(abs_install) else install_icon
+                if not os.path.exists(abs_install):
+                    lines.append(f"; Warning: Install icon file not found: {install_icon}")
+                lines.append(f'!define MUI_ICON "{rel_install}"')
+            if uninstall_icon:
+                abs_uninstall = self._resolve_path_relative_to_config(uninstall_icon)
+                rel_uninstall = self._get_relative_path_for_nsi(abs_uninstall) if os.path.exists(abs_uninstall) else uninstall_icon
+                if not os.path.exists(abs_uninstall):
+                    lines.append(f"; Warning: Uninstall icon file not found: {uninstall_icon}")
+                lines.append(f'!define MUI_UNICON "{rel_uninstall}"')
             lines.append("")
 
         # If any env vars request append behavior, emit helper functions (Contains & RemovePathEntry)

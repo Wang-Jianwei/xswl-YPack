@@ -5,7 +5,7 @@ app:
   version: "2.0.1"
   publisher: "Advanced Software Inc."
   description: "Advanced application with all features enabled"
-  icon: "resources/app.ico"
+  install_icon: "resources/app.ico"
   license: "LICENSE.txt"
 
 install:

@@ -95,8 +95,23 @@ app:
   version: "1.0.0"                # 版本号 / Version
   publisher: "My Company"         # 发布者 / Publisher
   description: "App description"  # 描述 / Description
-  icon: "app.ico"                 # 图标文件 / Icon file (optional)
+  # Icons: specify installer/shortcut icon and uninstaller icon separately
+  install_icon: "app.ico"         # 安装器/快捷方式图标 / Installer/shortcut icon (optional)
+  uninstall_icon: "uninstall.ico" # 卸载程序图标 / Uninstaller icon (optional)
   license: "LICENSE.txt"          # 许可协议 / License file (optional)
+
+# File associations can specify a separate icon shown in Explorer for the associated extension
+```yaml
+install:
+  file_associations:
+    - extension: ".myformat"
+      description: "My Custom File"
+      prog_id: "MyApp.Document"
+      default_icon: "$INSTDIR\\icons\\myformat.ico"
+      application: "$INSTDIR\\MyApp.exe"
+      verbs:
+        open: '"$INSTDIR\\MyApp.exe" "%1"'
+```
 ```
 
 ### 安装配置 / Installation Configuration

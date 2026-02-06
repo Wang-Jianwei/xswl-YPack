@@ -169,12 +169,12 @@ def main():
 
     cfg = yaml.safe_load(cfg_path.read_text(encoding='utf-8'))
 
-    # Validate/auto-fix icon
-    icon = cfg.get('app', {}).get('icon')
+    # Validate/auto-fix install icon
+    install_icon = cfg.get('app', {}).get('install_icon')
     icon_candidates = []
-    if icon:
-        icon_candidates.append(icon)
-        icon_candidates.append(str(repo_root / icon))
+    if install_icon:
+        icon_candidates.append(install_icon)
+        icon_candidates.append(str(repo_root / install_icon))
     # common locations in tmp data
     icon_candidates += [
         'tmp/SigVNA-20260123-cascade/logo.ico',
@@ -186,13 +186,13 @@ def main():
     if found_icon:
         # set relative path from repo root
         rel_icon = os.path.relpath(found_icon, start=str(repo_root))
-        cfg.setdefault('app', {})['icon'] = rel_icon
+        cfg.setdefault('app', {})['install_icon'] = rel_icon
         if args.verbose:
-            print(f'Using icon: {rel_icon}')
+            print(f'Using install icon: {rel_icon}')
     else:
-        # remove icon if not found
-        cfg.setdefault('app', {})['icon'] = ''
-        print('Warning: icon not found; icon will be omitted from NSIS')
+        # remove install_icon if not found
+        cfg.setdefault('app', {})['install_icon'] = ''
+        print('Warning: install icon not found; install icon will be omitted from NSIS')
 
     # Validate/auto-fix license
     license_candidate = cfg.get('app', {}).get('license')

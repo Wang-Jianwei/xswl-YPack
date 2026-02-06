@@ -5,7 +5,7 @@ app:
   version: "1.5.0"
   publisher: Go Developer
   description: A Go application installer
-  icon: assets/logo.ico
+  install_icon: assets/logo.ico
 
 install:
   install_dir: $PROGRAMFILES64\\${APP_NAME}

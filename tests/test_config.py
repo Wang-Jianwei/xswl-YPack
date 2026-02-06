@@ -32,12 +32,23 @@ class TestAppInfo(unittest.TestCase):
         data = {
             "name": "TestApp",
             "version": "1.0.0",
-            "icon": "app.ico",
+            "install_icon": "app.ico",
             "license": "LICENSE.txt"
         }
         app = AppInfo.from_dict(data)
-        self.assertEqual(app.icon, "app.ico")
+        self.assertEqual(app.install_icon, "app.ico")
         self.assertEqual(app.license, "LICENSE.txt")
+
+    def test_uninstall_icon_defaults_to_install_icon(self):
+        """If only install_icon is provided, uninstall_icon should fall back to it"""
+        data = {
+            "name": "TestApp",
+            "version": "1.0.0",
+            "install_icon": "app.ico",
+        }
+        app = AppInfo.from_dict(data)
+        self.assertEqual(app.install_icon, "app.ico")
+        self.assertEqual(app.uninstall_icon, "app.ico")
 
 
 class TestFileEntry(unittest.TestCase):

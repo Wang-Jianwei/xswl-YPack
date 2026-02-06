@@ -350,7 +350,8 @@ ExecWait "PowerShell -ExecutionPolicy Bypass -File \"$INSTDIR\setup_script.ps1\"
 
 ```yaml
 app:
-  icon: "assets/myapp.ico"  # 程序和卸载程序的图标
+  install_icon: "assets/myapp.ico"  # 安装器/快捷方式的图标
+  uninstall_icon: "assets/myapp_uninstall.ico"  # 卸载程序的图标
 
 custom_includes:
   nsis:
@@ -694,14 +695,14 @@ install:
     - extension: ".myformat"
       description: "My Custom File"
       program_id: "MyApp.Document"
-      icon: "$INSTDIR\\icons\\document.ico"
+      default_icon: "$INSTDIR\\icons\\document.ico"
       open_action: "open"
       open_command: "\"$INSTDIR\\MyApp.exe\" \"%1\""
       
     - extension: ".myproject"
       description: "My Project File"
       program_id: "MyApp.Project"
-      icon: "$INSTDIR\\icons\\project.ico"
+      default_icon: "$INSTDIR\\icons\\project.ico"
 ```
 
 **生成代码**:

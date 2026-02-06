@@ -5,7 +5,7 @@ app:
   version: "2.1.0"
   publisher: Python Developer
   description: A Python application packaged with PyInstaller
-  icon: dist/app.ico
+  install_icon: dist/app.ico
 
 install:
   install_dir: $LOCALAPPDATA\\${APP_NAME}

@@ -7,7 +7,7 @@ app:
   version: "1.0.0"
   publisher: "My Company"
   description: "A sample application installer"
-  icon: "app.ico"  # Optional: path to application icon
+  install_icon: "app.ico"  # Optional: path to installer/shortcut icon
   license: "LICENSE.txt"  # Optional: path to license file
 
 # Installation configuration

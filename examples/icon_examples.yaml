@@ -1,0 +1,48 @@
+# Example: icon usage for installer, uninstaller and file associations
+# Shows installer/uninstaller icons, file association icons and desktop/start menu shortcuts
+
+app:
+  name: "IconDemoApp"
+  version: "1.2.3"
+  publisher: "DemoCorp"
+  description: "Demonstrates icon usage for installer and file associations"
+  install_icon: "resources/installer.ico"   # Icon used by installer and shortcuts
+  uninstall_icon: "resources/uninstaller.ico" # Icon used by uninstaller
+  license: "LICENSE"
+
+install:
+  install_dir: "$PROGRAMFILES64\\DemoCorp\\IconDemoApp"
+  create_desktop_shortcut: true
+  create_start_menu_shortcut: true
+  launch_on_finish: "$INSTDIR\\IconDemo.exe"
+
+files:
+  - source: "dist/*"
+    destination: "$INSTDIR"
+    recursive: true
+
+  - source: "resources/installer.ico"
+    destination: "$INSTDIR"
+    recursive: false
+
+  - source: "resources/uninstaller.ico"
+    destination: "$INSTDIR"
+    recursive: false
+
+  - source: "resources/icons/myext.ico"
+    destination: "$INSTDIR\\icons"
+    recursive: false
+
+install:
+  install_dir: "$PROGRAMFILES64\\DemoCorp\\IconDemoApp"
+
+# File association example: show a separate icon that appears in Explorer
+install:
+  file_associations:
+    - extension: ".demo"
+      prog_id: "IconDemoApp.Document"
+      description: "Icon Demo Document"
+      application: "$INSTDIR\\IconDemo.exe"
+      default_icon: "$INSTDIR\\icons\\myext.ico"
+      verbs:
+        open: '"$INSTDIR\\IconDemo.exe" "%1"'

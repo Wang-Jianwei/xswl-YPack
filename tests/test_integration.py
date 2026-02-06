@@ -75,7 +75,8 @@ app:
   version: "2.0.0"
   publisher: Complete Publisher
   description: Complete test
-  icon: app.ico
+  install_icon: app.ico
+  uninstall_icon: uninstall.ico
   license: LICENSE.txt
 
 install:
@@ -109,10 +110,42 @@ update:
             # Verify all features are present
             self.assertIn("CompleteTest", nsis_script)
             self.assertIn("MUI_ICON", nsis_script)  # Changed from "Icon" to "MUI_ICON" (MUI2 standard)
+            self.assertIn("MUI_UNICON", nsis_script)
+            self.assertIn("app.ico", nsis_script)
+            self.assertIn("uninstall.ico", nsis_script)
             self.assertIn("LicenseData", nsis_script)
             self.assertIn("!finalize", nsis_script)  # Signing
             self.assertIn("UPDATE_URL", nsis_script)  # Update config
             
+        finally:
+            os.unlink(yaml_path)
+
+    def test_install_icon_implies_uninstall_icon_in_nsis(self):
+        """If only install_icon is provided, NSIS output should set both MUI_ICON and MUI_UNICON"""
+        yaml_content = """
+app:
+  name: IconFallback
+  version: "1.0.0"
+  publisher: Test
+  description: "Icon fallback test"
+  install_icon: single.ico
+
+install:
+  install_dir: $PROGRAMFILES64\\IconFallback
+
+files:
+  - app.exe
+"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+            f.write(yaml_content)
+            yaml_path = f.name
+        try:
+            config = PackageConfig.from_yaml(yaml_path)
+            converter = YamlToNsisConverter(config)
+            nsis_script = converter.convert()
+            self.assertIn("MUI_ICON", nsis_script)
+            self.assertIn("MUI_UNICON", nsis_script)
+            self.assertIn("single.ico", nsis_script)
         finally:
             os.unlink(yaml_path)
 
