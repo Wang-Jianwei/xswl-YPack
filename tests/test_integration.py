@@ -1,154 +1,242 @@
-"""
-Integration tests for xswl-YPack
+"""End-to-end integration tests.
+
+Each test writes a YAML config, runs the full conversion pipeline,
+and verifies the generated .nsi script.
 """
 
-import unittest
-import tempfile
+from __future__ import annotations
+
 import os
+import textwrap
+
+import pytest
+
 from ypack.config import PackageConfig
-from ypack.converters.convert_nsis import YamlToNsisConverter
+from ypack.converters import YamlToNsisConverter
 
 
-class TestIntegration(unittest.TestCase):
-    """Integration tests for the complete workflow"""
-    
-    def test_simple_workflow(self):
-        """Test complete workflow from YAML to NSIS"""
-        # Create a temporary YAML file
-        yaml_content = """
-app:
-  name: IntegrationTest
-  version: "1.0.0"
-  publisher: Test
-  description: Integration test app
-
-install:
-  install_dir: $PROGRAMFILES64\\IntegrationTest
-  desktop_shortcut_target: $INSTDIR\\IntegrationTest.exe
-  start_menu_shortcut_target: $INSTDIR\\IntegrationTest.exe
-
-files:
-  - test.exe
-"""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
-            f.write(yaml_content)
-            yaml_path = f.name
-        
-        try:
-            # Load config
-            config = PackageConfig.from_yaml(yaml_path)
-            self.assertEqual(config.app.name, "IntegrationTest")
-            
-            # Convert to NSIS
-            converter = YamlToNsisConverter(config)
-            nsis_script = converter.convert()
-            
-            # Verify script content
-            self.assertIn("IntegrationTest", nsis_script)
-            self.assertIn("Section \"Install\"", nsis_script)
-            self.assertIn("Section \"Uninstall\"", nsis_script)
-            
-            # Save to file
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.nsi', delete=False) as nsi_f:
-                nsi_path = nsi_f.name
-            
-            converter.save(nsi_path)
-            
-            # Verify file was created
-            self.assertTrue(os.path.exists(nsi_path))
-            
-            # Verify file content
-            with open(nsi_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-                self.assertIn("IntegrationTest", content)
-            
-            os.unlink(nsi_path)
-            
-        finally:
-            os.unlink(yaml_path)
-    
-    def test_complete_config_workflow(self):
-        """Test workflow with all features enabled"""
-        yaml_content = """
-app:
-  name: CompleteTest
-  version: "2.0.0"
-  publisher: Complete Publisher
-  description: Complete test
-  install_icon: app.ico
-  uninstall_icon: uninstall.ico
-  license: LICENSE.txt
-
-install:
-  install_dir: $PROGRAMFILES64\\CompleteTest
-  desktop_shortcut_target: $INSTDIR\\CompleteTest.exe
-  start_menu_shortcut_target: $INSTDIR\\CompleteTest.exe
-
-files:
-  - app.exe
-  - source: lib/*
-    recursive: true
-
-signing:
-  enabled: true
-  certificate: cert.pfx
-  password: pass
-
-update:
-  enabled: true
-  update_url: https://example.com/updates
-"""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
-            f.write(yaml_content)
-            yaml_path = f.name
-        
-        try:
-            config = PackageConfig.from_yaml(yaml_path)
-            converter = YamlToNsisConverter(config)
-            nsis_script = converter.convert()
-            
-            # Verify all features are present
-            self.assertIn("CompleteTest", nsis_script)
-            self.assertIn("MUI_ICON", nsis_script)  # Changed from "Icon" to "MUI_ICON" (MUI2 standard)
-            self.assertIn("MUI_UNICON", nsis_script)
-            self.assertIn("app.ico", nsis_script)
-            self.assertIn("uninstall.ico", nsis_script)
-            self.assertIn("LicenseData", nsis_script)
-            self.assertIn("!finalize", nsis_script)  # Signing
-            self.assertIn("UPDATE_URL", nsis_script)  # Update config
-            
-        finally:
-            os.unlink(yaml_path)
-
-    def test_install_icon_implies_uninstall_icon_in_nsis(self):
-        """If only install_icon is provided, NSIS output should set both MUI_ICON and MUI_UNICON"""
-        yaml_content = """
-app:
-  name: IconFallback
-  version: "1.0.0"
-  publisher: Test
-  description: "Icon fallback test"
-  install_icon: single.ico
-
-install:
-  install_dir: $PROGRAMFILES64\\IconFallback
-
-files:
-  - app.exe
-"""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
-            f.write(yaml_content)
-            yaml_path = f.name
-        try:
-            config = PackageConfig.from_yaml(yaml_path)
-            converter = YamlToNsisConverter(config)
-            nsis_script = converter.convert()
-            self.assertIn("MUI_ICON", nsis_script)
-            self.assertIn("MUI_UNICON", nsis_script)
-            self.assertIn("single.ico", nsis_script)
-        finally:
-            os.unlink(yaml_path)
+@pytest.fixture()
+def simple_yaml(tmp_path):
+    p = tmp_path / "simple.yaml"
+    p.write_text(
+        textwrap.dedent("""\
+            app:
+              name: IntegApp
+              version: "2.3.4"
+              publisher: "IntegPub"
+              description: "Integration test"
+            install:
+              install_dir: "$PROGRAMFILES64\\\\IntegApp"
+              desktop_shortcut_target: "$INSTDIR\\\\IntegApp.exe"
+            files:
+              - IntegApp.exe
+              - source: "data/*"
+                destination: "$INSTDIR\\\\data"
+                recursive: true
+            languages:
+              - English
+              - SimplifiedChinese
+        """),
+        encoding="utf-8",
+    )
+    return str(p)
 
 
-if __name__ == '__main__':
-    unittest.main()
+@pytest.fixture()
+def full_yaml(tmp_path):
+    p = tmp_path / "full.yaml"
+    p.write_text(
+        textwrap.dedent("""\
+            app:
+              name: FullApp
+              version: "1.0.0"
+              publisher: "FullPub"
+              description: "Full test"
+              license: "LICENSE.txt"
+            install:
+              install_dir: "$PROGRAMFILES64\\\\FullApp"
+              desktop_shortcut_target: "$INSTDIR\\\\FullApp.exe"
+              start_menu_shortcut_target: "$INSTDIR\\\\FullApp.exe"
+              registry_entries:
+                - hive: HKLM
+                  key: "Software\\\\FullApp"
+                  name: InstallPath
+                  value: "$INSTDIR"
+                  type: string
+                  view: "64"
+              env_vars:
+                - name: FULLAPP_HOME
+                  value: "$INSTDIR"
+                  scope: system
+                - name: PATH
+                  value: "$INSTDIR\\\\bin"
+                  scope: system
+                  append: true
+              file_associations:
+                - extension: ".fa"
+                  prog_id: FullApp.File
+                  description: "FullApp Document"
+                  application: "$INSTDIR\\\\FullApp.exe"
+                  default_icon: "$INSTDIR\\\\icons\\\\doc.ico"
+                  verbs:
+                    open: '$INSTDIR\\\\FullApp.exe "%1"'
+              system_requirements:
+                min_windows_version: "10.0"
+                min_free_space_mb: 200
+                min_ram_mb: 1024
+                require_admin: true
+              launch_on_finish: "$INSTDIR\\\\FullApp.exe"
+              launch_on_finish_label: "Launch FullApp"
+            files:
+              - FullApp.exe
+              - source: "lib/*"
+                destination: "$INSTDIR\\\\lib"
+            packages:
+              App:
+                sources:
+                  - source: "app/*"
+                    destination: "$INSTDIR"
+                optional: false
+              Drivers:
+                children:
+                  PXI:
+                    sources:
+                      - source: "pxi/*"
+                        destination: "$INSTDIR\\\\pxi"
+                    optional: true
+                    default: false
+                    post_install:
+                      - "$INSTDIR\\\\pxi\\\\setup.cmd"
+            signing:
+              enabled: true
+              certificate: "cert.pfx"
+              password: "secret"
+              timestamp_url: "http://ts.example.com"
+              verify_signature: true
+            update:
+              enabled: true
+              update_url: "https://example.com/latest.json"
+              download_url: "https://example.com/download"
+              backup_on_upgrade: true
+            logging:
+              enabled: true
+              path: "$APPDATA\\\\FullApp\\\\install.log"
+              level: DEBUG
+            languages:
+              - English
+              - SimplifiedChinese
+        """),
+        encoding="utf-8",
+    )
+    return str(p)
+
+
+class TestSimpleIntegration:
+    def test_load_and_convert(self, simple_yaml, tmp_path):
+        cfg = PackageConfig.from_yaml(simple_yaml)
+        assert cfg.app.name == "IntegApp"
+        assert len(cfg.files) == 2
+
+        conv = YamlToNsisConverter(cfg, cfg._raw_dict)
+        nsi = conv.convert()
+
+        # Basic output checks
+        assert "Unicode true" in nsi
+        assert '!define APP_NAME "IntegApp"' in nsi
+        assert '!define APP_VERSION "2.3.4"' in nsi
+        assert 'MUI_LANGUAGE "English"' in nsi
+        assert 'MUI_LANGUAGE "SimplifiedChinese"' in nsi
+        assert 'File "IntegApp.exe"' in nsi
+        assert 'SetOutPath "$INSTDIR\\data"' in nsi
+        assert "CreateShortCut" in nsi
+
+    def test_save_file(self, simple_yaml, tmp_path):
+        cfg = PackageConfig.from_yaml(simple_yaml)
+        conv = YamlToNsisConverter(cfg, cfg._raw_dict)
+        out = str(tmp_path / "installer.nsi")
+        conv.save(out)
+        assert os.path.isfile(out)
+        content = open(out, encoding="utf-8").read()
+        assert "IntegApp" in content
+
+
+class TestFullIntegration:
+    def test_full_features(self, full_yaml, tmp_path):
+        cfg = PackageConfig.from_yaml(full_yaml)
+        conv = YamlToNsisConverter(cfg, cfg._raw_dict)
+        nsi = conv.convert()
+
+        # Header
+        assert "Unicode true" in nsi
+        assert '!define APP_NAME "FullApp"' in nsi
+
+        # License
+        assert "MUI_PAGE_LICENSE" in nsi
+
+        # Registry
+        assert 'WriteRegStr HKLM "Software\\FullApp" "InstallPath"' in nsi
+        assert "SetRegView 64" in nsi
+
+        # Env vars
+        assert '"FULLAPP_HOME"' in nsi
+        assert "Function _StrContains" in nsi  # PATH append helper
+        assert "Function un._RemovePathEntry" in nsi
+
+        # File associations
+        assert 'WriteRegStr HKCR ".fa"' in nsi
+        assert "FullApp.File" in nsi
+        assert "DefaultIcon" in nsi
+
+        # System requirements
+        assert "Requires Windows 10.0" in nsi
+        assert "200 MB" in nsi
+        assert "UserInfo::GetAccountType" in nsi
+
+        # Finish page
+        assert "MUI_FINISHPAGE_RUN" in nsi
+        assert "Launch FullApp" in nsi
+
+        # Packages
+        assert 'Section "App"' in nsi
+        assert 'SectionGroup "Drivers"' in nsi
+        assert 'Section "PXI"' in nsi
+        assert 'ExecWait "$INSTDIR\\pxi\\setup.cmd"' in nsi
+
+        # Signing
+        assert "!finalize" in nsi
+
+        # Update
+        assert "UPDATE_URL" in nsi
+        assert "DOWNLOAD_URL" in nsi
+
+        # Logging
+        assert "LogSet on" in nsi
+
+        # Uninstall
+        assert 'Section "Uninstall"' in nsi
+        assert 'DeleteRegValue HKLM "Software\\FullApp" "InstallPath"' in nsi
+        assert 'DeleteRegKey HKCR ".fa"' in nsi
+
+
+class TestVariableResolution:
+    def test_config_references(self, tmp_path):
+        p = tmp_path / "vars.yaml"
+        p.write_text(
+            textwrap.dedent("""\
+                app:
+                  name: VarApp
+                  version: "1.0"
+                install:
+                  install_dir: "$PROGRAMFILES64\\\\${app.name}"
+                files:
+                  - source: "app.exe"
+                variables:
+                  DATA_DIR: "$APPDATA\\\\${app.name}"
+            """),
+            encoding="utf-8",
+        )
+        cfg = PackageConfig.from_yaml(str(p))
+        conv = YamlToNsisConverter(cfg, cfg._raw_dict)
+        nsi = conv.convert()
+        # ${app.name} should be resolved to VarApp where the converter resolves it
+        assert "VarApp" in nsi

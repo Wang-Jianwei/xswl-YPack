@@ -1,1 +1,13 @@
-PyYAML>=5.1
+# Runtime dependencies
+PyYAML>=6.0
+
+# Optional / validation-related dependencies (install with extras or separately)
+# jsonschema>=4.0    # used for schema validation: `pip install .[validation]` or `pip install jsonschema`
+
+# Development / test dependencies (not required at runtime)
+# pytest>=7.0
+# ruff>=0.4
+# mypy>=1.0
+
+# Install from source with extras:
+# pip install -e ".[dev,validation]"

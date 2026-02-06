@@ -6,19 +6,25 @@
 pip install xswl-ypack
 ```
 
-Or install from source:
+Or install from source with dev tools:
 
 ```bash
 git clone https://github.com/Wang-Jianwei/xswl-YPack.git
 cd xswl-YPack
-pip install -e .
+pip install -e ".[dev,validation]"
 ```
 
 ## Basic Usage
 
-### 1. Create a YAML configuration file
+### 1. Generate a starter configuration
 
-Create `installer.yaml`:
+```bash
+xswl-ypack init
+```
+
+This creates `installer.yaml` with sensible defaults.
+
+### 2. Edit the YAML
 
 ```yaml
 app:
@@ -27,60 +33,56 @@ app:
   publisher: My Company
 
 install:
-  install_dir: $PROGRAMFILES64\\MyApp
-  create_desktop_shortcut: true
-  create_start_menu_shortcut: true
+  install_dir: "$PROGRAMFILES64\\MyApp"
+  desktop_shortcut_target: "$INSTDIR\\MyApp.exe"
+  start_menu_shortcut_target: "$INSTDIR\\MyApp.exe"
 
 files:
   - MyApp.exe
   - config.json
-
-# Pattern semantics
-- Use `dir/**/*` to recursively include all files under `dir` and subdirectories.
-- Use `dir/*` to include only direct children of `dir` (non-recursive).
-- To copy an entire directory as a folder under destination (preserve root folder), use `preserve_root: true` on the entry, e.g.:
-
-```yaml
-files:
-  - source: ./a/b/c
-    destination: $INSTDIR\m\n
-    preserve_root: true  # results in $INSTDIR\m\n\c\<files>
 ```
 
-# Registry example
-You can write and remove registry values during install/uninstall:
+> **Pattern semantics:**
+> - `dir/*` — direct children only (non-recursive).
+> - `dir/**/*` — recursive (generates `File /r`).
 
-```yaml
-install:
-  registry_entries:
-    - hive: HKLM
-      key: "Software\\MyApp"
-      name: "UpdateURL"
-      value: "https://example.com/updates"
-      type: "string"
-```
-
-```
-
-### 2. Generate NSIS script
+### 3. Validate the configuration
 
 ```bash
-xswl-ypack installer.yaml
+xswl-ypack validate installer.yaml -v
+```
+
+### 4. Generate the installer script
+
+```bash
+# Default: NSIS
+xswl-ypack convert installer.yaml
+
+# Specify format explicitly (nsis / wix / inno)
+xswl-ypack convert installer.yaml -f nsis
 ```
 
 This generates `installer.nsi` in the same directory.
 
-### 3. Build the installer (requires NSIS)
+### 5. Preview without writing a file
 
 ```bash
-xswl-ypack installer.yaml --build
+xswl-ypack convert installer.yaml --dry-run
 ```
 
-This generates both the `.nsi` file and builds `MyApp-1.0.0-Setup.exe`.
+### 6. Build the installer (requires compiler)
+
+```bash
+xswl-ypack convert installer.yaml --build
+```
+
+This generates the `.nsi` file and runs `makensis` to build `MyApp-1.0.0-Setup.exe`.
+
+> Currently, `--build` is supported for NSIS only. WIX and Inno Setup backends are coming soon.
 
 ## Example Workflows
 
-### For Python Projects (using PyInstaller)
+### Python Project (PyInstaller)
 
 ```yaml
 app:
@@ -89,11 +91,11 @@ app:
 
 files:
   - dist/MyPythonApp.exe
-  - source: dist/_internal/*
-    recursive: true
+  - source: "dist/_internal/**/*"
+    destination: "$INSTDIR\\_internal"
 ```
 
-### For C++ Projects
+### C++ Project
 
 ```yaml
 app:
@@ -102,11 +104,11 @@ app:
 
 files:
   - Release/MyCppApp.exe
-  - source: Release/*.dll
-    recursive: false
+  - source: "Release/*.dll"
+    destination: "$INSTDIR"
 ```
 
-### For Go Projects
+### Go Project
 
 ```yaml
 app:
@@ -120,12 +122,36 @@ files:
 
 ## Advanced Features
 
+### Registry Entries
+
+```yaml
+install:
+  registry_entries:
+    - hive: HKLM
+      key: "Software\\MyApp"
+      name: UpdateURL
+      value: "https://example.com/updates"
+      type: string
+      view: "64"
+```
+
+### Environment Variables
+
+```yaml
+install:
+  env_vars:
+    - name: PATH
+      value: "$INSTDIR\\bin"
+      scope: system
+      append: true
+```
+
 ### Code Signing
 
 ```yaml
 signing:
   enabled: true
-  certificate: path/to/cert.pfx
+  certificate: cert.pfx
   password: your_password
   timestamp_url: http://timestamp.digicert.com
 ```
@@ -135,26 +161,26 @@ signing:
 ```yaml
 update:
   enabled: true
-  update_url: https://example.com/updates/latest.json
-  check_on_startup: true
+  update_url: https://example.com/latest.json
+  download_url: https://example.com/download
+  backup_on_upgrade: true
 ```
 
 ### Custom NSIS Includes
 
 ```yaml
 custom_includes:
-  - custom_functions.nsh
-  - extra_pages.nsh
+  nsis:
+    - custom_functions.nsh
+    - extra_pages.nsh
 ```
 
 ## Testing
 
-Run the included tests:
-
 ```bash
-python -m unittest discover tests
+pytest tests/ -v
 ```
 
 ## More Information
 
-See the full [README.md](README.md) for detailed documentation.
+See the full [README.md](README.md) for detailed configuration reference.

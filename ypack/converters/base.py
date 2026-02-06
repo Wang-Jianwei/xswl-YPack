@@ -1,48 +1,55 @@
 """
-Base converter interfaces for packaging tools.
+Base converter interface for packaging tools.
 """
 
-from abc import ABC
-from typing import Dict, Any
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List
+
+from ..config import PackageConfig
+from .context import BuildContext
 
 
 class BaseConverter(ABC):
-    """Base class for tool-specific converters."""
+    """Abstract base class that every format converter must implement."""
 
-    tool_name = "generic"
+    tool_name: str = "generic"
 
-    def __init__(self, config, raw_config: Dict[str, Any] = None):
-        """Initialize the converter.
-        
-        Args:
-            config: PackageConfig instance
-            raw_config: Raw configuration dictionary (for variable resolution)
-        """
+    # Default output file extension per tool (subclasses may override).
+    output_extension: str = ".txt"
+
+    def __init__(self, config: PackageConfig, raw_config: Dict[str, Any] | None = None) -> None:
         self.config = config
-        self.raw_config = raw_config or {}
-        
-        # Initialize variable resolver
-        from ..resolver import create_resolver
-        self.resolver = create_resolver(self.raw_config, self.tool_name)
-    
+        self.raw_config = raw_config or getattr(config, "_raw_dict", {})
+        self.ctx = BuildContext(
+            config=config,
+            raw_config=self.raw_config,
+            target_tool=self.tool_name,
+            config_dir=getattr(config, "_config_dir", ""),
+        )
+
+    # ------------------------------------------------------------------
+    # Public API every converter MUST implement
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    def convert(self) -> str:
+        """Generate the full installer script as a string."""
+        ...
+
+    @abstractmethod
+    def save(self, output_path: str) -> None:
+        """Write the generated script to *output_path*."""
+        ...
+
+    # ------------------------------------------------------------------
+    # Shared helpers
+    # ------------------------------------------------------------------
+
     def resolve_variables(self, text: str) -> str:
-        """Resolve all variable references in text.
-        
-        Handles:
-        - Built-in variables: $INSTDIR, $PROGRAMFILES64, etc.
-        - Config references: ${app.name}, ${install.install_dir}, etc.
-        - Custom variables: ${variables.XXX}
-        
-        Args:
-            text: Text containing variable references
-            
-        Returns:
-            Text with all variables resolved
-        """
-        if not text or not isinstance(text, str):
-            return text
-        return self.resolver.resolve(text)
+        """Convenience proxy to ``self.ctx.resolve``."""
+        return self.ctx.resolve(text)
 
     def _warn_unsupported(self, feature: str) -> str:
-        """Return a standardized comment for unsupported features."""
         return f"; [UNSUPPORTED by {self.tool_name}] {feature}"

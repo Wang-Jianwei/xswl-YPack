@@ -1,30 +1,40 @@
 """
-Configuration parser for YAML packaging configuration
+Configuration parser for YAML packaging configuration.
+
+All configuration data classes are defined here with proper ordering
+to avoid forward reference issues.
 """
+
+from __future__ import annotations
 
 try:
     import yaml
 except ImportError as e:
     raise ImportError(
-        "PyYAML is required. Install with: pip install PyYAML  OR pip install -r requirements.txt") from e
+        "PyYAML is required. Install with: pip install PyYAML"
+    ) from e
 
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 
 
+# ---------------------------------------------------------------------------
+# Leaf data classes (no forward references)
+# ---------------------------------------------------------------------------
+
 @dataclass
 class AppInfo:
-    """Application information"""
-    name: str               # 应用名称
-    version: str            # 版本号
-    publisher: str = ""     # 发布者
-    description: str = ""   # 应用描述
-    install_icon: str = ""  # 安装器/快捷方式使用的图标路径
-    uninstall_icon: str = ""# 卸载程序使用的图标路径
+    """Application metadata."""
+    name: str
+    version: str
+    publisher: str = ""
+    description: str = ""
+    install_icon: str = ""
+    uninstall_icon: str = ""
     license: str = ""
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "AppInfo":
+    def from_dict(cls, data: Dict[str, Any]) -> AppInfo:
         return cls(
             name=data.get("name", ""),
             version=data.get("version", "1.0.0"),
@@ -32,45 +42,43 @@ class AppInfo:
             description=data.get("description", ""),
             install_icon=data.get("install_icon", ""),
             uninstall_icon=data.get("uninstall_icon", data.get("install_icon", "")),
-            license=data.get("license", "")
+            license=data.get("license", ""),
         )
 
 
 @dataclass
 class RegistryEntry:
-    """Registry entry configuration for installer/uninstaller"""
-
-    def __init__(self, hive: str, key: str, name: str, value: str, type: str = "string", view: str = "auto"):
-        self.hive = hive  # "HKLM" or "HKCU" （含义：安装到机器范围或用户范围）
-        self.key = key
-        self.name = name
-        self.value = value
-        self.type = type  # "string", "expand", "dword"
-        self.view = view  # "auto", "32", "64"
+    """Registry entry written / removed by the installer."""
+    hive: str = "HKLM"
+    key: str = ""
+    name: str = ""
+    value: str = ""
+    type: str = "string"   # "string" | "expand" | "dword"
+    view: str = "auto"     # "auto" | "32" | "64"
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "RegistryEntry":
+    def from_dict(cls, data: Dict[str, Any]) -> RegistryEntry:
         return cls(
             hive=data.get("hive", "HKLM"),
             key=data.get("key", ""),
             name=data.get("name", ""),
             value=data.get("value", ""),
             type=data.get("type", "string"),
-            view=data.get("view", "auto")
+            view=data.get("view", "auto"),
         )
 
 
 @dataclass
 class EnvVarEntry:
-    """Environment variable configuration"""
-    name: str
-    value: str
-    scope: str = "system"  # "system" (HKLM) or "user" (HKCU)
+    """Environment variable set / removed by the installer."""
+    name: str = ""
+    value: str = ""
+    scope: str = "system"        # "system" (HKLM) | "user" (HKCU)
     remove_on_uninstall: bool = True
-    append: bool = False
+    append: bool = False         # PATH-append semantics
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "EnvVarEntry":
+    def from_dict(cls, data: Dict[str, Any]) -> EnvVarEntry:
         return cls(
             name=data.get("name", ""),
             value=data.get("value", ""),
@@ -81,271 +89,18 @@ class EnvVarEntry:
 
 
 @dataclass
-class InstallConfig:
-    """Installation configuration"""
-    install_dir: str = "$PROGRAMFILES64\\${APP_NAME}"
-    desktop_shortcut_target: str = ""  # Path to executable for desktop shortcut (e.g. $INSTDIR\\MyApp.exe)
-    start_menu_shortcut_target: str = ""  # Path to executable for start menu shortcut
-    registry_entries: List[RegistryEntry] = field(default_factory=list)
-    env_vars: List[EnvVarEntry] = field(default_factory=list)
-    file_associations: List[FileAssociation] = field(default_factory=list)
-    system_requirements: Optional[SystemRequirements] = None
-    # Finish page: optional launch checkbox
-    launch_on_finish: str = ""  # Path to executable to run if user checks the Finish page checkbox
-    launch_on_finish_label: str = ""  # Optional label for the checkbox
-    launch_in_background: bool = True  # If False, may use ExecWait semantics (not implemented yet)
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "InstallConfig":
-        entries = []
-        entries = []
-        for e in data.get("registry_entries", []):
-            if isinstance(e, dict):
-                entries.append(RegistryEntry.from_dict(e))
-        envs = []
-        for v in data.get("env_vars", []):
-            if isinstance(v, dict):
-                envs.append(EnvVarEntry.from_dict(v))
-        file_assocs = []
-        for fa in data.get("file_associations", []):
-            if isinstance(fa, dict):
-                file_assocs.append(FileAssociation.from_dict(fa))
-        sysreq = None
-        if isinstance(data.get("system_requirements"), dict):
-            sysreq = SystemRequirements.from_dict(
-                data.get("system_requirements"))
-        return cls(
-            install_dir=data.get("install_dir", "$PROGRAMFILES64\\${APP_NAME}"),
-            desktop_shortcut_target=data.get("desktop_shortcut_target", ""),
-            start_menu_shortcut_target=data.get("start_menu_shortcut_target", ""),
-            registry_entries=entries,
-            env_vars=envs,
-            file_associations=file_assocs,
-            system_requirements=sysreq,
-            launch_on_finish=data.get("launch_on_finish", ""),
-            launch_on_finish_label=data.get("launch_on_finish_label", ""),
-            launch_in_background=data.get("launch_in_background", True),
-        )
-
-
-@dataclass
-class FileEntry:
-    """File entry for installation.
-    
-    source can be a local path or a remote URL (http:// or https://).
-    The converter will automatically detect URLs and generate download logic.
-    """
-    source: str
-    destination: str = "$INSTDIR"
-    recursive: bool = False
-    # Optional verification and decompression fields
-    checksum_type: str = ""
-    checksum_value: str = ""
-    decompress: bool = False
-
-    @property
-    def is_remote(self) -> bool:
-        """Check if source is a remote URL."""
-        return self.source.startswith("http://") or self.source.startswith("https://")
-
-    @classmethod
-    def from_dict(cls, data: Any) -> "FileEntry":
-        if isinstance(data, str):
-            return cls(source=data)
-        # Support legacy 'download_url' field: if present and source is not a URL, use download_url as source
-        source = data.get("source", "")
-        download_url = data.get("download_url", "")
-        if download_url and not (source.startswith("http://") or source.startswith("https://")):
-            source = download_url
-        return cls(
-            source=source,
-            destination=data.get("destination", "$INSTDIR"),
-            recursive=data.get("recursive", False),
-            checksum_type=data.get("checksum_type", ""),
-            checksum_value=data.get("checksum_value", ""),
-            decompress=data.get("decompress", False)
-        )
-
-
-@dataclass
-class PackageEntry:
-    """Package/Component entry for modular installation"""
-    name: str
-    sources: List[Dict[str, str]]  # List of {source, destination} dicts
-    recursive: bool = True
-    optional: bool = False
-    default: bool = True
-    description: str = ""
-    children: List["PackageEntry"] = field(default_factory=list)
-    post_install: List[str] = field(default_factory=list)
-
-    @classmethod
-    def from_dict(cls, name: str, data: Dict[str, Any]) -> "PackageEntry":
-        # Handle nested children (SectionGroup)
-        children_data = data.get("children", {})
-        children_list: List[PackageEntry] = []
-        if isinstance(children_data, dict):
-            for child_name, child_data in children_data.items():
-                if isinstance(child_data, dict):
-                    children_list.append(
-                        PackageEntry.from_dict(child_name, child_data))
-
-        # Handle sources as list of dicts or convert from old format
-        sources_data = data.get("sources", data.get("source", []))
-        sources_list = []
-
-        if isinstance(sources_data, str):
-            # Single source string (old format)
-            sources_list = [{
-                "source": sources_data,
-                "destination": data.get("destination", "$INSTDIR")
-            }]
-        elif isinstance(sources_data, list):
-            # List format - can be strings or dicts
-            for item in sources_data:
-                if isinstance(item, str):
-                    # String source with package-level destination
-                    sources_list.append({
-                        "source": item,
-                        "destination": data.get("destination", "$INSTDIR")
-                    })
-                elif isinstance(item, dict):
-                    # Dict with source possibly being a string or a list of strings
-                    src = item.get("source", "")
-                    dest = item.get("destination", data.get(
-                        "destination", "$INSTDIR"))
-                    if isinstance(src, list):
-                        for s in src:
-                            sources_list.append({
-                                "source": s,
-                                "destination": dest
-                            })
-                    else:
-                        sources_list.append({
-                            "source": src,
-                            "destination": dest
-                        })
-
-        # Handle post-install commands
-        post_install_data = data.get("post_install", [])
-        if isinstance(post_install_data, str):
-            post_install_list = [post_install_data]
-        elif isinstance(post_install_data, list):
-            post_install_list = [str(x) for x in post_install_data if x]
-        else:
-            post_install_list = []
-
-        return cls(
-            name=name,
-            sources=sources_list,
-            recursive=data.get("recursive", True),
-            optional=data.get("optional", False),
-            default=data.get("default", True),
-            description=data.get("description", ""),
-            children=children_list,
-            post_install=post_install_list,
-        )
-
-
-@dataclass
-class SigningConfig:
-    """Code signing configuration"""
-    enabled: bool = False
-    certificate: str = ""
-    password: str = ""
-    timestamp_url: str = "http://timestamp.digicert.com"
-    verify_signature: bool = False
-    checksum_type: str = ""
-    checksum_value: str = ""
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "SigningConfig":
-        return cls(
-            enabled=data.get("enabled", False),
-            certificate=data.get("certificate", ""),
-            password=data.get("password", ""),
-            timestamp_url=data.get(
-                "timestamp_url", "http://timestamp.digicert.com"),
-            verify_signature=data.get("verify_signature", False),
-            checksum_type=data.get("checksum_type", ""),
-            checksum_value=data.get("checksum_value", "")
-        )
-
-
-@dataclass
-class UpdateConfig:
-    """Auto-update configuration"""
-    enabled: bool = False
-    update_url: str = ""
-    download_url: str = ""
-    backup_on_upgrade: bool = False
-    repair_enabled: bool = False
-    check_on_startup: bool = True
-    # Registry settings for update metadata (allow writing to HKCU/HKLM and custom key)
-    registry_hive: str = "HKLM"
-    registry_key: str = "Software\\${app.name}"  # Cross-tool compatible; uses config reference ${app.name}
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "UpdateConfig":
-        return cls(
-            enabled=data.get("enabled", False),
-            update_url=data.get("update_url", ""),
-            download_url=data.get("download_url", ""),
-            backup_on_upgrade=data.get("backup_on_upgrade", False),
-            repair_enabled=data.get("repair_enabled", False),
-            check_on_startup=data.get("check_on_startup", True),
-            registry_hive=data.get("registry_hive", "HKLM"),
-            registry_key=data.get("registry_key", "Software\\${app.name}")
-        )
-
-
-@dataclass
-class SystemRequirements:
-    """System requirements to check before installation"""
-    min_windows_version: str = ""  # e.g. "10.0"
-    min_free_space_mb: int = 0
-    min_ram_mb: int = 0
-    require_admin: bool = False
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "SystemRequirements":
-        return cls(
-            min_windows_version=data.get("min_windows_version", ""),
-            min_free_space_mb=int(data.get("min_free_space_mb", 0)),
-            min_ram_mb=int(data.get("min_ram_mb", 0)),
-            require_admin=data.get("require_admin", False),
-        )
-
-
-@dataclass
-class LoggingConfig:
-    """Logging configuration for installer runs"""
-    enabled: bool = False
-    path: str = ""
-    level: str = "INFO"
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "LoggingConfig":
-        return cls(
-            enabled=data.get("enabled", False),
-            path=data.get("path", ""),
-            level=data.get("level", "INFO")
-        )
-
-
-@dataclass
 class FileAssociation:
-    """File association configuration for installer"""
-    extension: str
+    """File type association registered by the installer."""
+    extension: str = ""
     prog_id: str = ""
     description: str = ""
     application: str = ""
     default_icon: str = ""
-    verbs: Dict[str, str] = field(default_factory=dict)  # verb -> command
+    verbs: Dict[str, str] = field(default_factory=dict)
     register_for_all_users: bool = True
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "FileAssociation":
+    def from_dict(cls, data: Dict[str, Any]) -> FileAssociation:
         return cls(
             extension=data.get("extension", ""),
             prog_id=data.get("prog_id", ""),
@@ -358,8 +113,254 @@ class FileAssociation:
 
 
 @dataclass
+class SystemRequirements:
+    """Pre-installation system checks."""
+    min_windows_version: str = ""
+    min_free_space_mb: int = 0
+    min_ram_mb: int = 0
+    require_admin: bool = False
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> SystemRequirements:
+        return cls(
+            min_windows_version=data.get("min_windows_version", ""),
+            min_free_space_mb=int(data.get("min_free_space_mb", 0)),
+            min_ram_mb=int(data.get("min_ram_mb", 0)),
+            require_admin=data.get("require_admin", False),
+        )
+
+
+@dataclass
+class SigningConfig:
+    """Code-signing configuration."""
+    enabled: bool = False
+    certificate: str = ""
+    password: str = ""
+    timestamp_url: str = "http://timestamp.digicert.com"
+    verify_signature: bool = False
+    checksum_type: str = ""
+    checksum_value: str = ""
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> SigningConfig:
+        return cls(
+            enabled=data.get("enabled", False),
+            certificate=data.get("certificate", ""),
+            password=data.get("password", ""),
+            timestamp_url=data.get("timestamp_url", "http://timestamp.digicert.com"),
+            verify_signature=data.get("verify_signature", False),
+            checksum_type=data.get("checksum_type", ""),
+            checksum_value=data.get("checksum_value", ""),
+        )
+
+
+@dataclass
+class UpdateConfig:
+    """Auto-update metadata written to the registry."""
+    enabled: bool = False
+    update_url: str = ""
+    download_url: str = ""
+    backup_on_upgrade: bool = False
+    repair_enabled: bool = False
+    check_on_startup: bool = True
+    registry_hive: str = "HKLM"
+    registry_key: str = "Software\\${app.name}"
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> UpdateConfig:
+        return cls(
+            enabled=data.get("enabled", False),
+            update_url=data.get("update_url", ""),
+            download_url=data.get("download_url", ""),
+            backup_on_upgrade=data.get("backup_on_upgrade", False),
+            repair_enabled=data.get("repair_enabled", False),
+            check_on_startup=data.get("check_on_startup", True),
+            registry_hive=data.get("registry_hive", "HKLM"),
+            registry_key=data.get("registry_key", "Software\\${app.name}"),
+        )
+
+
+@dataclass
+class LoggingConfig:
+    """Installer logging settings."""
+    enabled: bool = False
+    path: str = ""
+    level: str = "INFO"
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> LoggingConfig:
+        return cls(
+            enabled=data.get("enabled", False),
+            path=data.get("path", ""),
+            level=data.get("level", "INFO"),
+        )
+
+
+# ---------------------------------------------------------------------------
+# InstallConfig — depends on the leaf types above
+# ---------------------------------------------------------------------------
+
+@dataclass
+class InstallConfig:
+    """Installation behaviour configuration."""
+    install_dir: str = "$PROGRAMFILES64\\${APP_NAME}"
+    desktop_shortcut_target: str = ""
+    start_menu_shortcut_target: str = ""
+    registry_entries: List[RegistryEntry] = field(default_factory=list)
+    env_vars: List[EnvVarEntry] = field(default_factory=list)
+    file_associations: List[FileAssociation] = field(default_factory=list)
+    system_requirements: Optional[SystemRequirements] = None
+    launch_on_finish: str = ""
+    launch_on_finish_label: str = ""
+    launch_in_background: bool = True
+    silent_install: bool = False
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> InstallConfig:
+        registry_entries = [
+            RegistryEntry.from_dict(e)
+            for e in data.get("registry_entries", [])
+            if isinstance(e, dict)
+        ]
+        env_vars = [
+            EnvVarEntry.from_dict(v)
+            for v in data.get("env_vars", [])
+            if isinstance(v, dict)
+        ]
+        file_associations = [
+            FileAssociation.from_dict(fa)
+            for fa in data.get("file_associations", [])
+            if isinstance(fa, dict)
+        ]
+        sysreq = None
+        sysreq_data = data.get("system_requirements")
+        if isinstance(sysreq_data, dict):
+            sysreq = SystemRequirements.from_dict(sysreq_data)
+
+        return cls(
+            install_dir=data.get("install_dir", "$PROGRAMFILES64\\${APP_NAME}"),
+            desktop_shortcut_target=data.get("desktop_shortcut_target", ""),
+            start_menu_shortcut_target=data.get("start_menu_shortcut_target", ""),
+            registry_entries=registry_entries,
+            env_vars=env_vars,
+            file_associations=file_associations,
+            system_requirements=sysreq,
+            launch_on_finish=data.get("launch_on_finish", ""),
+            launch_on_finish_label=data.get("launch_on_finish_label", ""),
+            launch_in_background=data.get("launch_in_background", True),
+            silent_install=data.get("silent_install", False),
+        )
+
+
+# ---------------------------------------------------------------------------
+# FileEntry / PackageEntry
+# ---------------------------------------------------------------------------
+
+@dataclass
+class FileEntry:
+    """A single file / directory to be installed.
+
+    *source* may be a local path or a remote URL (http:// / https://).
+    """
+    source: str
+    destination: str = "$INSTDIR"
+    recursive: bool = False
+    checksum_type: str = ""
+    checksum_value: str = ""
+    decompress: bool = False
+
+    @property
+    def is_remote(self) -> bool:
+        return self.source.startswith("http://") or self.source.startswith("https://")
+
+    @classmethod
+    def from_dict(cls, data: Any) -> FileEntry:
+        if isinstance(data, str):
+            return cls(source=data)
+        source: str = data.get("source", "")
+        download_url: str = data.get("download_url", "")
+        if download_url and not source.startswith(("http://", "https://")):
+            source = download_url
+        return cls(
+            source=source,
+            destination=data.get("destination", "$INSTDIR"),
+            recursive=data.get("recursive", False),
+            checksum_type=data.get("checksum_type", ""),
+            checksum_value=data.get("checksum_value", ""),
+            decompress=data.get("decompress", False),
+        )
+
+
+@dataclass
+class PackageEntry:
+    """A component / package for modular installation."""
+    name: str
+    sources: List[Dict[str, str]]
+    recursive: bool = True
+    optional: bool = False
+    default: bool = True
+    description: str = ""
+    children: List[PackageEntry] = field(default_factory=list)
+    post_install: List[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, name: str, data: Dict[str, Any]) -> PackageEntry:
+        # Children (nested SectionGroup)
+        children: List[PackageEntry] = []
+        children_data = data.get("children", {})
+        if isinstance(children_data, dict):
+            for child_name, child_data in children_data.items():
+                if isinstance(child_data, dict):
+                    children.append(PackageEntry.from_dict(child_name, child_data))
+
+        # Sources — normalise many accepted input shapes
+        sources_data = data.get("sources", data.get("source", []))
+        sources: List[Dict[str, str]] = []
+        default_dest = data.get("destination", "$INSTDIR")
+
+        if isinstance(sources_data, str):
+            sources = [{"source": sources_data, "destination": default_dest}]
+        elif isinstance(sources_data, list):
+            for item in sources_data:
+                if isinstance(item, str):
+                    sources.append({"source": item, "destination": default_dest})
+                elif isinstance(item, dict):
+                    src = item.get("source", "")
+                    dest = item.get("destination", default_dest)
+                    if isinstance(src, list):
+                        for s in src:
+                            sources.append({"source": s, "destination": dest})
+                    else:
+                        sources.append({"source": src, "destination": dest})
+
+        # Post-install commands
+        post_raw = data.get("post_install", [])
+        if isinstance(post_raw, str):
+            post_install = [post_raw]
+        elif isinstance(post_raw, list):
+            post_install = [str(x) for x in post_raw if x]
+        else:
+            post_install = []
+
+        return cls(
+            name=name,
+            sources=sources,
+            recursive=data.get("recursive", True),
+            optional=data.get("optional", False),
+            default=data.get("default", True),
+            description=data.get("description", ""),
+            children=children,
+            post_install=post_install,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Top-level PackageConfig
+# ---------------------------------------------------------------------------
+
+@dataclass
 class PackageConfig:
-    """Main package configuration"""
+    """Root configuration object — parsed from a YAML file."""
     app: AppInfo
     install: InstallConfig
     files: List[FileEntry] = field(default_factory=list)
@@ -368,49 +369,56 @@ class PackageConfig:
     update: Optional[UpdateConfig] = None
     logging: Optional[LoggingConfig] = None
     languages: List[str] = field(default_factory=lambda: ["English"])
-    # Generic tool-specific includes mapping (e.g., {"nsis": ["a.nsh"], "wix": [...]} )
     custom_includes: Dict[str, List[str]] = field(default_factory=dict)
-    _raw_dict: Dict[str, Any] = field(default_factory=dict, repr=False)  # Store raw YAML for variable resolution
+    _raw_dict: Dict[str, Any] = field(default_factory=dict, repr=False)
+    _config_dir: str = field(default="", repr=False)
+
+    # ------------------------------------------------------------------
+    # Constructors
+    # ------------------------------------------------------------------
 
     @classmethod
-    def from_yaml(cls, yaml_path: str) -> "PackageConfig":
-        """Load configuration from YAML file"""
-        with open(yaml_path, 'r', encoding='utf-8') as f:
-            data = yaml.safe_load(f)
+    def from_yaml(cls, yaml_path: str) -> PackageConfig:
+        """Load and validate configuration from a YAML file."""
+        import os
+        with open(yaml_path, "r", encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
 
-        config = cls(
-            app=AppInfo.from_dict(data.get("app", {})),
-            install=InstallConfig.from_dict(data.get("install", {})),
-            files=[FileEntry.from_dict(f) for f in data.get("files", [])],
-            packages=[PackageEntry.from_dict(name, pkg_data)
-                      for name, pkg_data in data.get("packages", {}).items()],
-            signing=SigningConfig.from_dict(
-                data["signing"]) if "signing" in data else None,
-            update=UpdateConfig.from_dict(
-                data["update"]) if "update" in data else None,
-            logging=LoggingConfig.from_dict(
-                data["logging"]) if "logging" in data else None,
-            languages=data.get("languages", ["English"]),
-            custom_includes=data.get("custom_includes", {}),
-            _raw_dict=data  # Store raw dict for variable resolution
-        )
+        from .schema import validate_config
+        validate_config(data)
+
+        config = cls._build(data)
+        config._config_dir = os.path.dirname(os.path.abspath(yaml_path))
         return config
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "PackageConfig":
-        """Load configuration from dictionary"""
+    def from_dict(cls, data: Dict[str, Any]) -> PackageConfig:
+        """Build configuration from a plain dictionary (tests, API)."""
+        return cls._build(data)
+
+    @classmethod
+    def _build(cls, data: Dict[str, Any]) -> PackageConfig:
         return cls(
             app=AppInfo.from_dict(data.get("app", {})),
             install=InstallConfig.from_dict(data.get("install", {})),
             files=[FileEntry.from_dict(f) for f in data.get("files", [])],
-            packages=[PackageEntry.from_dict(name, pkg_data)
-                      for name, pkg_data in data.get("packages", {}).items()],
-            signing=SigningConfig.from_dict(
-                data["signing"]) if "signing" in data else None,
-            update=UpdateConfig.from_dict(
-                data["update"]) if "update" in data else None,
-            logging=LoggingConfig.from_dict(
-                data["logging"]) if "logging" in data else None,
+            packages=[
+                PackageEntry.from_dict(name, pkg)
+                for name, pkg in data.get("packages", {}).items()
+            ],
+            signing=(
+                SigningConfig.from_dict(data["signing"])
+                if "signing" in data else None
+            ),
+            update=(
+                UpdateConfig.from_dict(data["update"])
+                if "update" in data else None
+            ),
+            logging=(
+                LoggingConfig.from_dict(data["logging"])
+                if "logging" in data else None
+            ),
             languages=data.get("languages", ["English"]),
-            custom_includes=data.get("custom_includes", {})
+            custom_includes=data.get("custom_includes", {}),
+            _raw_dict=data,
         )

@@ -1,45 +1,57 @@
 # xswl-YPack
 
-一个轻量级的 Windows 工程打包工具，和 Electron-Builder 类似。
+一个轻量级的 Windows 工程打包工具，类似 Electron-Builder。支持 NSIS、WIX、Inno Setup 等多种后端。
 
-A lightweight Windows packaging tool, similar to Electron-Builder.
+A lightweight Windows packaging tool, similar to Electron-Builder. Supports multiple backends: NSIS, WIX, Inno Setup, and more.
 
 ## 特性 / Features
 
 - 🚀 **语言无关** / Language-agnostic: 支持 C++、Python、Go 等任何语言的项目
 - 📝 **YAML 配置** / YAML-based: 通过简单的 YAML 配置文件定义打包内容
-- 🔍 **可审计** / Auditable: 生成可读的 NSIS/WIX 脚本，便于审查和定制
+- 🔌 **多后端** / Multi-backend: 支持 NSIS（已实现），WIX / Inno Setup（计划中）
+- 🔍 **可审计** / Auditable: 生成可读的安装脚本，便于审查和定制
 - ✍️ **易定制** / Easy to customize: 支持代码签名、自动更新、自定义安装流程
-- 🎯 **轻量级** / Lightweight: 纯 Python 实现，无复杂依赖
+- 🎯 **轻量级** / Lightweight: 纯 Python 实现，仅依赖 PyYAML
+- ✅ **Schema 校验** / Schema validation: 可选的 jsonschema 校验，配置错误即时发现
+- 🔧 **子命令 CLI** / Subcommand CLI: `convert` · `init` · `validate`
 
 ## 工作流程 / Workflow
 
-```js
-YAML 配置 → Python 转换器 → NSIS 脚本 → makensis → Windows 安装包
-YAML Config → Python Converter → NSIS Script → makensis → Windows Installer
+```
+YAML 配置 → Python 转换器 → NSIS / WIX / Inno 脚本 → 编译器 → Windows 安装包
+YAML Config → Python Converter → NSIS / WIX / Inno Script → Compiler → Windows Installer
 ```
 
 ## 安装 / Installation
+
+### 使用 pip / Install with pip
+
+```bash
+pip install xswl-ypack
+```
 
 ### 从源码安装 / Install from source
 
 ```bash
 git clone https://github.com/Wang-Jianwei/xswl-YPack.git
 cd xswl-YPack
-pip install -e .
+pip install -e ".[dev,validation]"
 ```
 
-### 使用 pip 安装 / Install with pip
-
-```bash
-pip install xswl-ypack
-```
+> `validation` 可选依赖会安装 `jsonschema`，启用完整的 YAML 配置校验。
+> `dev` 包含 pytest / ruff / mypy / jsonschema 等开发工具。
 
 ## 快速开始 / Quick Start
 
-### 1. 创建 YAML 配置文件 / Create a YAML configuration file
+### 1. 生成配置模板 / Generate a starter config
 
-创建一个 `installer.yaml` 文件：
+```bash
+xswl-ypack init
+```
+
+这会在当前目录创建 `installer.yaml` 模板。
+
+### 2. 编辑 YAML 配置 / Edit the YAML
 
 ```yaml
 app:
@@ -50,246 +62,234 @@ app:
 
 install:
   install_dir: "$PROGRAMFILES64\\${APP_NAME}"
-  create_desktop_shortcut: true
-  create_start_menu_shortcut: true
+  desktop_shortcut_target: "$INSTDIR\\MyApp.exe"
+  start_menu_shortcut_target: "$INSTDIR\\MyApp.exe"
 
 files:
   - "MyApp.exe"
-  - source: "resources/**/*"  # Use ** to indicate recursion (recommended)
-    # recursive: true  # Deprecated: use ** in source pattern instead
+  - source: "resources/**/*"
+    destination: "$INSTDIR\\resources"
 ```
 
-### 2. 生成 NSIS 脚本 / Generate NSIS script
+### 3. 生成安装脚本 / Convert
 
 ```bash
-xswl-ypack installer.yaml -o installer.nsi
+# 生成 installer.nsi（默认 NSIS 格式）
+xswl-ypack convert installer.yaml
+
+# 指定输出格式（nsis / wix / inno）
+xswl-ypack convert installer.yaml -f nsis
+
+# 指定输出路径
+xswl-ypack convert installer.yaml -o dist/installer.nsi
+
+# 预览到标准输出（不写文件）
+xswl-ypack convert installer.yaml --dry-run
 ```
 
-这将生成一个可读的 `installer.nsi` 文件，您可以查看和修改它。
-
-### 3. 构建安装包 / Build installer
+### 4. 构建安装包 / Build
 
 ```bash
-# 仅生成 NSIS 脚本 / Generate NSIS script only
-xswl-ypack installer.yaml
-
-# 生成脚本并构建安装包 / Generate and build installer
-xswl-ypack installer.yaml --build
-
-# 指定 makensis 路径 / Specify makensis path
-xswl-ypack installer.yaml --build --makensis "C:\Program Files\NSIS\makensis.exe"
+xswl-ypack convert installer.yaml --build
 ```
 
-## 配置选项 / Configuration Options
+需要系统安装对应编译器（如 [NSIS](https://nsis.sourceforge.io/) 的 `makensis`，需在 PATH 中或通过 `--makensis` 指定路径）。
 
-### 变量 / Variables
+### 5. 校验配置 / Validate only
 
-- 有关变量系统（内置变量、配置引用与自定义变量）的完整说明，请参阅：`docs/VARIABLES.md`（包含语法、示例与内置变量表）。
+```bash
+xswl-ypack validate installer.yaml -v
+```
 
+## CLI 命令 / CLI Commands
+
+```bash
+xswl-ypack --help              # 查看帮助
+xswl-ypack --version           # 版本号
+
+# 子命令
+xswl-ypack convert <yaml> [-o output] [-f nsis|wix|inno] [--dry-run] [--build] [-v]
+xswl-ypack init [-o installer.yaml]
+xswl-ypack validate <yaml> [-v]
+
+# 向后兼容：直接传文件名等价于 convert
+xswl-ypack installer.yaml -o out.nsi
+```
+
+`-f / --format` 指定目标后端（默认 `nsis`）。当前已实现 NSIS；WIX 和 Inno Setup 后端即将推出。
+
+## 配置选项 / Configuration Reference
 
 ### 应用信息 / Application Information
 
 ```yaml
 app:
-  name: "MyApplication"           # 应用名称 / Application name
-  version: "1.0.0"                # 版本号 / Version
-  publisher: "My Company"         # 发布者 / Publisher
-  description: "App description"  # 描述 / Description
-  # Icons: specify installer/shortcut icon and uninstaller icon separately
-  install_icon: "app.ico"         # 安装器/快捷方式图标 / Installer/shortcut icon (optional)
-  uninstall_icon: "uninstall.ico" # 卸载程序图标 / Uninstaller icon (optional)
-  license: "LICENSE.txt"          # 许可协议 / License file (optional)
-
-# File associations can specify a separate icon shown in Explorer for the associated extension
-```yaml
-install:
-  file_associations:
-    - extension: ".myformat"
-      description: "My Custom File"
-      prog_id: "MyApp.Document"
-      default_icon: "$INSTDIR\\icons\\myformat.ico"
-      application: "$INSTDIR\\MyApp.exe"
-      verbs:
-        open: '"$INSTDIR\\MyApp.exe" "%1"'
-```
+  name: "MyApp"                    # 必须 / required
+  version: "1.0.0"                 # 版本号
+  publisher: "My Company"          # 发布者
+  description: "App description"   # 描述
+  install_icon: "app.ico"          # 安装器图标
+  uninstall_icon: "uninstall.ico"  # 卸载器图标（默认回退到 install_icon）
+  license: "LICENSE.txt"           # 许可协议文件
 ```
 
 ### 安装配置 / Installation Configuration
 
 ```yaml
 install:
-  install_dir: "$PROGRAMFILES64\\${APP_NAME}"  # 安装目录 / Install directory
-  desktop_shortcut_target: "$INSTDIR\\${APP_NAME}.exe"  # 桌面快捷方式目标（存在则创建）
-  start_menu_shortcut_target: "$INSTDIR\\${APP_NAME}.exe"  # 开始菜单快捷方式目标（存在则创建）
+  install_dir: "$PROGRAMFILES64\\${APP_NAME}"
+  desktop_shortcut_target: "$INSTDIR\\MyApp.exe"
+  start_menu_shortcut_target: "$INSTDIR\\MyApp.exe"
+  launch_on_finish: "$INSTDIR\\MyApp.exe"
+  launch_on_finish_label: "Launch MyApp"
+  silent_install: false
 ```
 
-#### 注册表项 / Registry entries
+### 文件 / Files
 
-你可以在安装时写入自定义注册表值，并在卸载时自动删除它们。支持三种类型：`string`（WriteRegStr）、`expand`（WriteRegExpandStr）和 `dword`（WriteRegDWORD）。
+```yaml
+files:
+  - "MyApp.exe"                      # 简单文件
+  - source: "config.json"            # 指定目标
+    destination: "$INSTDIR"
+  - source: "resources/**/*"         # ** 表示递归
+    destination: "$INSTDIR\\resources"
+  - source: "https://example.com/plugin.zip"   # 远程下载
+    checksum_type: sha256
+    checksum_value: "abc123..."
+    decompress: true
+```
 
-示例：
+> **模式语义**：`dir/*` = 非递归；`dir/**/*` = 递归（生成 `File /r`）
+
+### 注册表 / Registry Entries
 
 ```yaml
 install:
   registry_entries:
-    - hive: HKLM
+    - hive: HKLM                   # HKLM | HKCU | HKCR | HKU | HKCC
       key: "Software\\MyApp"
-      name: "UpdateURL"
-      value: "https://example.com/updates"
-      type: "string"
-      view: "64"
-    - hive: HKCU
-      key: "Software\\MyApp"
-      name: "Enabled"
-      value: "1"
-      type: "dword"
-      view: "32"  # (optional) view: auto|32|64, default auto
+      name: "InstallPath"
+      value: "$INSTDIR"
+      type: "string"               # string | expand | dword
+      view: "64"                   # auto | 32 | 64
 ```
 
-生成的安装脚本会在安装阶段写入这些值，卸载阶段会调用 `DeleteRegValue` 删除对应的值。
+安装时写入，卸载时自动 `DeleteRegValue`。`SetRegView` 会在每条带 `view` 的条目前自动插入。
 
-注意：`SetRegView` 会改变后续的注册表视图（32/64 位）。转换器会在每条有指定 `view` 的条目之前插入对应的 `SetRegView`，以确保写入/删除在预期的注册表视图中执行。
-
-### 环境变量 / Environment variables
-
-你可以通过 `install.env_vars` 在安装/卸载阶段设置或删除环境变量。对 `PATH` 支持追加模式（`append: true`）并包含归一化机制来避免重复和处理大小写差异。
-
-示例：
+### 环境变量 / Environment Variables
 
 ```yaml
 install:
   env_vars:
-    - name: MY_VAR
-      value: "C:\\Program Files\\MyApp"
-      scope: system        # system -> HKLM, user -> HKCU
+    - name: MYAPP_HOME
+      value: "$INSTDIR"
+      scope: system                 # system | user
       remove_on_uninstall: true
-      append: false
-
     - name: PATH
       value: "$INSTDIR\\bin"
       scope: system
-      append: true         # 追加到 PATH（会去重并在卸载时移除）
+      append: true                  # PATH 追加（自动去重，卸载时精确移除）
       remove_on_uninstall: true
 ```
 
-实现说明：
-
-- 当 `append: true` 且 `name` 为 `PATH` 时，生成器会：
-  - 读取当前 PATH（注册表）并对 PATH 与要追加的条目进行 **归一化**（转换分隔符、去重、大小写规范化），
-  - 仅在未存在时追加，写回注册表并广播 `WM_SETTINGCHANGE` 以使修改生效，
-  - 在卸载时会精确移除之前追加的条目（如果 `remove_on_uninstall: true`）。
-
-- 对非 `PATH` 的 `append: true`，转换器会写入值但不会做自动合并（会以注释说明）。
-
-- 注意：修改系统 PATH 需要管理员权限，且在某些情况下需要重启或重新登录以完全生效。
-
-如果在同一配置中混用了多个不同的 `view`（例如既有 `32` 又有 `64`），生成器会在注册表段顶部插入显眼注释提醒：
-
-```
-; ============================================================
-; WARNING: registry entries use multiple SetRegView values: 32,64
-; Converter will insert SetRegView before each affected entry.
-; Be aware: SetRegView affects subsequent registry operations.
-; ============================================================
-```
-
-### 文件配置 / Files Configuration
-
-> 说明：从 v0.x 起，**仅当 source 模式包含 `**`（例如 `dir/**/*`）时，转换器会把该条目视为递归（生成 `File /r`）。**
->
-> - `dir/*` 仅匹配当前目录的直接子项（非递归）。
-> - `dir/**/*` 会递归匹配所有子目录和文件（生成 `File /r`）。
-> - `recursive` 字段仍然兼容但已不推荐使用；建议使用 `**` 明确表达递归意图。
-
-```yaml
-files:
-  # 简单文件 / Simple file
-  - "MyApp.exe"
-  
-  # 带目标路径的文件 / File with destination
-  - source: "config.json"
-    destination: "$INSTDIR"
-    recursive: false
-  
-  # 递归目录 / Recursive directory
-  - source: "resources/**/*"  # recursive: use ** for recursion (matches all subdirs and files)
-    destination: "$INSTDIR\\resources"
-    # recursive: true  # deprecated: prefer using ** in source pattern
-```
+`append: true` 时自动生成 `_StrContains` / `_RemovePathEntry` 辅助函数，并在修改后广播 `WM_SETTINGCHANGE`。
 
 ### 文件关联 / File Associations
-
-安装器可以在安装/卸载时为指定文件扩展名注册 ProgID（支持系统范围或当前用户范围）。
-
-示例：
 
 ```yaml
 install:
   file_associations:
-    - extension: ".foo"
-      prog_id: "FooApp.File"
-      description: "Foo File"
-      application: "$INSTDIR\\Foo.exe"
-      default_icon: "$INSTDIR\\icons\\foo.ico"
+    - extension: ".myf"
+      prog_id: "MyApp.File"
+      description: "MyApp Document"
+      application: "$INSTDIR\\MyApp.exe"
+      default_icon: "$INSTDIR\\icons\\doc.ico"
       verbs:
-        open: "$INSTDIR\\Foo.exe \"%1\""
-      register_for_all_users: true  # true -> HKCR (system), false -> HKCU\\Software\\Classes (per-user)
+        open: '$INSTDIR\\MyApp.exe "%1"'
+      register_for_all_users: true  # true → HKCR, false → HKCU\Software\Classes
 ```
 
-说明：
+### 系统需求检查 / System Requirements
 
-更多示例见 `examples/` 目录：
+```yaml
+install:
+  system_requirements:
+    min_windows_version: "10.0"
+    min_free_space_mb: 500
+    min_ram_mb: 2048
+    require_admin: true
+```
 
-- `examples/file_association_user.yaml` — per-user 文件关联示例（使用 HKCU\\Software\\Classes）
-- `examples/update_registry_user.yaml` — per-user 更新元数据示例（写入 HKCU）
+在 `.onInit` 中生成对应的预检逻辑。
 
+### 组件包 / Packages (Components)
 
+```yaml
+packages:
+  App:
+    sources:
+      - source: "app/*"
+        destination: "$INSTDIR"
+    optional: false
+  Drivers:
+    children:
+      PXI:
+        sources:
+          - source: "pxi/*"
+            destination: "$INSTDIR\\pxi"
+        optional: true
+        default: false
+        post_install:
+          - "$INSTDIR\\pxi\\setup.cmd"
+```
 
-- `extension`：要关联的文件扩展名（包含点号），例如 `.foo`。
-- `prog_id`：程序标识符（用于在注册表中建立映射）。
-- `application`：打开该文件的命令（可以包含 `%1` 占位符）。
-- `default_icon`：可选，程序图标的路径（写入 `DefaultIcon` 键）。
-- `verbs`：可选的动词映射（如 `open`, `edit`），键为动词名，值为命令字符串。
-- `register_for_all_users`：若为 `true`，注册在系统范围（HKCR），需要管理员；若为 `false`，注册到 `HKCU\Software\Classes`（无需管理员）。
+生成 NSIS `SectionGroup` / `Section`。`post_install` 以 `ExecWait` 执行。
 
-安装器会在卸载阶段删除对应的注册表键以还原文件关联。
-
-### 代码签名 / Code Signing (可选 / Optional)
+### 代码签名 / Code Signing
 
 ```yaml
 signing:
   enabled: true
-  certificate: "path/to/certificate.pfx"
-  password: "your_password"
+  certificate: "cert.pfx"
+  password: "secret"
   timestamp_url: "http://timestamp.digicert.com"
+  verify_signature: true
 ```
 
-### 自动更新 / Auto-update (可选 / Optional)
+### 自动更新 / Auto-Update
 
 ```yaml
 update:
   enabled: true
-  update_url: "https://example.com/updates/latest.json"
-  download_url: "https://example.com/downloads/latest.exe"  # 可选：下载安装包的 URL
-  backup_on_upgrade: true     # 可选：在升级前备份旧版本
-  repair_enabled: true        # 可选：启用修复模式
-  check_on_startup: true
-  # 可选：写入注册表的 Hive 与 Key
-  registry_hive: "HKCU"      # HKLM (系统范围，需要管理员) 或 HKCU (当前用户)
-  registry_key: "Software\\MyCompany\\MyApp"  # 可选自定义注册表路径
+  update_url: "https://example.com/latest.json"
+  download_url: "https://example.com/download"
+  backup_on_upgrade: true
+  registry_hive: "HKCU"
+  registry_key: "Software\\MyCompany\\MyApp"
 ```
 
-说明：
+### 安装日志 / Logging
 
-- `update_url`：应用用于检查更新的 URL（例如 JSON 元数据）。
-- `download_url`：可选，实际的安装包下载地址（安装器会把该值写入注册表供应用使用）。
-- `backup_on_upgrade`：若为 `true`，安装器会将当前安装备份以便回滚（应用需要在运行时实现具体逻辑）。
-- `repair_enabled`：若为 `true`，安装器会在注册表写入相应标志，应用或用户可使用此标志触发修复流程。
-- `registry_hive` / `registry_key`：可配置在安装时写入更新元数据的注册表位置。默认写入 `HKLM ${REG_KEY}`，若设置为 `HKCU` 则会写入当前用户范围（无需管理员权限）。
+```yaml
+logging:
+  enabled: true
+  path: "$APPDATA\\${APP_NAME}\\install.log"
+  level: DEBUG          # DEBUG | INFO | WARNING | ERROR
+```
 
-### 自定义脚本 / Custom Includes (可选 / Optional)
+### 多语言 / Languages
 
-首选写法（按目标分组）：
+```yaml
+languages:
+  - English
+  - SimplifiedChinese
+  - Japanese
+```
+
+默认值：`["English"]`。使用 NSIS MUI 语言标识符。
+
+### 自定义脚本 / Custom Includes
 
 ```yaml
 custom_includes:
@@ -298,117 +298,66 @@ custom_includes:
     - "extra_pages.nsh"
 ```
 
-## 国际化 / Languages
+### 变量 / Variables
 
-你可以通过 `languages` 字段为生成的安装器启用多个界面语言（NSIS Modern UI 的 MUI 语言标识）。
+有关变量系统（内置变量、配置引用与自定义变量）的完整说明，请参阅 [docs/VARIABLES.md](docs/VARIABLES.md)。
 
-示例：
-
-```yaml
-# 在 installer.yaml 中指定多语言支持
-languages:
-  - English
-  - SimplifiedChinese  # 简体中文
-  - TraditionalChinese # 繁體中文
-```
-
-说明：
-
-- 默认值：如果未指定 `languages`，转换器会使用 `["English"]`。
-- 支持值：使用 NSIS MUI 可识别的语言标识（大小写敏感）。常见示例包括：
-  `English`, `SimplifiedChinese`, `TraditionalChinese`, `French`, `German`, `Spanish`,
-  `Japanese`, `Korean`, `Russian`, `Polish`, `Portuguese`, `BrazilianPortuguese`,
-  `Czech`, `Turkish`, `Hungarian`。
-- 注意：请使用 MUI 的精确标识字符串，转换器会为每个配置项生成一条 `!insertmacro MUI_LANGUAGE "<lang>"` 指令。该字段主要作用于 NSIS MUI；若目标转换器不支持多语言，此字段可能被忽略。
-- 参考（NSIS MUI 语言）： https://nsis.sourceforge.io/Modern_User_Interface/Language_support
-
-## 使用示例 / Usage Examples
-
-### Python 项目 / Python Project
-
-```yaml
-app:
-  name: "MyPythonApp"
-  version: "1.0.0"
-  publisher: "Python Developer"
-
-files:
-  - "dist/MyPythonApp.exe"  # PyInstaller 生成的可执行文件
-  - source: "dist/lib/*"
-    recursive: true
-```
-
-### C++ 项目 / C++ Project
-
-```yaml
-app:
-  name: "MyCppApp"
-  version: "2.0.0"
-  publisher: "C++ Developer"
-
-files:
-  - "Release/MyCppApp.exe"
-  - "Release/*.dll"
-```
-
-### Go 项目 / Go Project
-
-```yaml
-app:
-  name: "MyGoApp"
-  version: "1.5.0"
-  publisher: "Go Developer"
-
-files:
-  - "MyGoApp.exe"
-  - "config.yaml"
-```
-
-## CLI 命令 / CLI Commands
-
-```bash
-# 查看帮助 / Show help
-xswl-ypack --help
-
-# 生成 NSIS 脚本 / Generate NSIS script (默认格式 nsis)
-xswl-ypack config.yaml
-
-# 指定格式 / Specify format (currently: nsis)
-xswl-ypack config.yaml --format nsis
-
-# 指定输出文件 / Specify output file
-xswl-ypack config.yaml -o custom.nsi
-
-# 生成并构建 / Generate and build
-xswl-ypack config.yaml --build
-
-# 详细输出 / Verbose output
-xswl-ypack config.yaml -v --build
-```
-
-## Python API 使用 / Python API Usage
+## Python API
 
 ```python
-from ypack import PackageConfig, YamlToNsisConverter
+from ypack import PackageConfig, YamlToNsisConverter, get_converter_class
 
-# 从 YAML 文件加载配置 / Load config from YAML
+# 直接使用 NSIS 转换器
 config = PackageConfig.from_yaml("installer.yaml")
-
-# 创建转换器 / Create converter
-converter = YamlToNsisConverter(config)
-
-# 生成 NSIS 脚本 / Generate NSIS script
-nsis_script = converter.convert()
-
-# 保存到文件 / Save to file
+converter = YamlToNsisConverter(config, config._raw_dict)
 converter.save("installer.nsi")
+
+# 或通过注册表按名称获取转换器（支持 nsis / wix / inno …）
+ConverterClass = get_converter_class("nsis")
+converter = ConverterClass(config, config._raw_dict)
+script = converter.convert()
 ```
 
-## 要求 / Requirements
+## 开发 / Development
 
-- Python 3.7+
-- PyYAML 5.1+
-- NSIS (用于构建安装包 / for building installers)
+```bash
+# 安装开发依赖
+pip install -e ".[dev,validation]"
+
+# 运行测试
+pytest tests/ -v
+
+# 代码检查
+ruff check ypack/
+mypy ypack/
+```
+
+## 项目结构 / Project Structure
+
+```
+ypack/
+  __init__.py          # 版本 & 公共 API（导出 get_converter_class）
+  cli.py               # CLI 入口 (convert / init / validate / --format)
+  config.py            # YAML → dataclass 配置解析
+  schema.py            # jsonschema 配置校验
+  variables.py         # 内置变量 & 语言定义（NSIS / WIX / Inno 三重映射）
+  resolver.py          # 变量引用解析 (${...} / $VAR)
+  converters/
+    __init__.py        # 转换器注册表 (CONVERTER_REGISTRY)
+    base.py            # 抽象基类 BaseConverter（tool_name / output_extension）
+    context.py         # BuildContext (target_tool 驱动路径分隔符 & 变量映射)
+    convert_nsis.py    # NSIS 脚本组装器
+    nsis_header.py     # 头部 / 定义 / MUI
+    nsis_sections.py   # 安装 / 卸载 Section
+    nsis_packages.py   # 组件 Section / 签名 / 更新 / .onInit
+    nsis_helpers.py    # PATH 辅助函数 / 校验函数
+```
+
+## 系统要求 / Requirements
+
+- Python ≥ 3.10
+- PyYAML ≥ 6.0
+- NSIS / WIX / Inno Setup（对应后端的编译器）
 
 ## 许可证 / License
 
@@ -418,9 +367,9 @@ MIT License
 
 欢迎提交 Issue 和 Pull Request！
 
-Welcome to submit Issues and Pull Requests!
-
 ## 相关项目 / Related Projects
 
 - [NSIS](https://nsis.sourceforge.io/) - Nullsoft Scriptable Install System
+- [WiX Toolset](https://wixtoolset.org/) - Windows Installer XML Toolset
+- [Inno Setup](https://jrsoftware.org/isinfo.php) - Free installer for Windows programs
 - [Electron-Builder](https://www.electron.build/) - Complete solution to package Electron apps

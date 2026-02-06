@@ -1,111 +1,167 @@
-# 工作流程与原理 📦🔧
+# 架构与工作流程 📦🔧
 
-本文档以图与文字结合的方式说明 `xswl-YPack` 的工作流程与内部原理，便于理解与扩展。
+本文档说明 `xswl-YPack` v0.2.0 的内部架构与工作流程。
 
 ## 总览
 
 ```mermaid
 flowchart LR
-  subgraph CLI & API
-    Start["用户：CLI / 库 API"]
+  subgraph CLI
+    Start["xswl-ypack convert / validate / init"]
   end
 
-  Start --> ParseConfig["加载并解析 YAML 配置<br>(PackageConfig.from_yaml)"]
-  ParseConfig --> ConfigParts["解析出的配置对象：<br>AppInfo / InstallConfig / FileEntry / SigningConfig / UpdateConfig"]
+  Start --> ParseConfig["加载 YAML<br>PackageConfig.from_yaml"]
+  ParseConfig --> SchemaValidation["Schema 校验<br>schema.validate_config"]
+  SchemaValidation --> BuildDataclasses["构建 dataclass 树<br>AppInfo / InstallConfig / ..."]
 
-  ConfigParts --> ConverterInit["初始化 YamlToNsisConverter(config)"]
-  ConverterInit --> Convert["调用 convert() 构建 NSIS 脚本内容"]
+  BuildDataclasses --> ConverterInit["YamlToNsisConverter(config, raw_dict)"]
+  ConverterInit --> CreateContext["创建 BuildContext<br>(config, raw_dict, resolver)"]
+  CreateContext --> Convert["convert() → 组装各子模块"]
 
-  subgraph Sections[生成的 NSIS 节]
-    Header["Header<br>(应用信息、定义)" ]
-    Includes["Custom Includes<br>(!include ...)" ]
-    GenSettings["General Settings<br>(Name, OutFile, InstallDir, Icon, License)" ]
-    UI["Modern UI<br>(MUI 页面配置)" ]
-    Signing["Signing 配置<br>(可选：!finalize 命令)" ]
-    Update["Update 配置<br>(可选：写入注册表)" ]
-    Installer["Installer Section<br>(拷贝文件、创建快捷方式、写注册表)" ]
-    Uninstaller["Uninstaller Section<br>(删除文件、移除注册表、移除快捷方式)" ]
+  subgraph Modules[NSIS 子模块]
+    nsis_header["nsis_header.py<br>Unicode / defines / MUI"]
+    nsis_sections["nsis_sections.py<br>Install & Uninstall Section"]
+    nsis_packages["nsis_packages.py<br>Packages / Signing / Update / .onInit"]
+    nsis_helpers["nsis_helpers.py<br>PATH helpers / checksum"]
   end
 
-  Convert --> Header
-  Convert --> Includes
-  Convert --> GenSettings
-  Convert --> UI
-  Convert --> Signing
-  Convert --> Update
-  Convert --> Installer
-  Convert --> Uninstaller
+  Convert --> nsis_header
+  Convert --> nsis_sections
+  Convert --> nsis_packages
+  Convert --> nsis_helpers
 
-  Header & Includes & GenSettings & UI & Signing & Update & Installer & Uninstaller --> NSISContent["拼接并返回 NSIS 脚本（字符串）"]
-  NSISContent --> Save["save(output_path) -> 写入 installer.nsi"]
-  Save --> OptionalBuild{"是否执行 --build?"}
-  OptionalBuild -->|是| Makensis["调用 makensis 构建安装程序 (.exe)"]
-  OptionalBuild -->|否| End["完成：输出 NSIS 脚本"]
-  Makensis --> EndBuilt["完成：生成 installer.exe（可选签名）"]
-
-  %% 补充说明：变量替换流程
-  Convert --> VarReplace["变量替换: ${APP_NAME}, ${APP_VERSION}, ${APP_PUBLISHER} 等"]
-  VarReplace --> NSISContent
+  nsis_header & nsis_sections & nsis_packages & nsis_helpers --> Assemble["拼接 → 完整 .nsi 字符串"]
+  Assemble --> SaveOrDryRun{"--dry-run?"}
+  SaveOrDryRun -->|否| Save["save() → 写入 installer.nsi"]
+  SaveOrDryRun -->|是| Stdout["输出到 stdout"]
+  Save --> OptionalBuild{"--build?"}
+  OptionalBuild -->|是| Makensis["调用 makensis"]
+  OptionalBuild -->|否| End["完成"]
+  Makensis --> End
 
   style Start fill:#f9f,stroke:#333,stroke-width:1px
   style End fill:#bfb,stroke:#333,stroke-width:1px
-  style Makensis fill:#ffdf80,stroke:#333,stroke-width:1px
 ```
 
 ---
 
-## 关键步骤说明 🔍
+## 模块职责 🧩
 
-- 加载配置：使用 `PackageConfig.from_yaml` 将 YAML 文件解析为结构化对象（`AppInfo`、`InstallConfig`、`FileEntry` 等）。
-- 转换器：`YamlToNsisConverter` 负责把配置映射成 NSIS 脚本的多个节（header、UI、installer、uninstaller 等），通过 `convert()` 返回完整脚本字符串，`save()` 写入文件。实现位于 `ypack/converters/convert_nsis.py`，便于后续扩展其他打包工具。
-- 变量替换：模板字符串中会替换 `${APP_NAME}`、`${APP_VERSION}`、`${APP_PUBLISHER}` 等占位符。
-- 可选行为：如果开启 `signing`，会在脚本中加入 `!finalize` 签名命令；如果执行 `--build`，CLI 会调用 `makensis` 来生成安装程序。
+| 模块 | 职责 |
+|---|---|
+| `cli.py` | 子命令入口：`convert`（`-f` 格式选项）、`init`、`validate` |
+| `config.py` | YAML → dataclass 解析；所有配置类定义 |
+| `schema.py` | jsonschema 校验（可选 fallback） |
+| `variables.py` | 内置变量定义（NSIS / WIX / Inno 三重映射）、语言定义 |
+| `resolver.py` | `${config.ref}` / `$BUILTIN` 变量解析、循环引用检测 |
+| `converters/__init__.py` | **转换器注册表**（`CONVERTER_REGISTRY` / `get_converter_class()`） |
+| `converters/base.py` | `BaseConverter` 抽象基类（`tool_name` / `output_extension` / `convert` / `save`） |
+| `converters/context.py` | `BuildContext`：共享上下文（`target_tool` 驱动 resolver & 路径分隔符） |
+| `converters/convert_nsis.py` | `YamlToNsisConverter`：主组装器，调用各子模块 |
+| `converters/nsis_header.py` | Unicode / defines / icons / MUI pages / general settings |
+| `converters/nsis_sections.py` | Install Section（文件、注册表、环境变量、快捷方式、文件关联）<br>Uninstall Section（反向清理） |
+| `converters/nsis_packages.py` | 组件 Section / SectionGroup / 签名 / 更新 / `.onInit` |
+| `converters/nsis_helpers.py` | `_StrContains` / `_RemovePathEntry` 辅助函数 + 校验函数 |
 
 ---
 
-## 扩展点与注意事项 ⚙️
+## 关键设计决策 🔍
 
-- 自定义 NSIS 片段：通过 `custom_includes.nsis` 可以注入自定义 `!include` 文件来扩展功能。
-- 文件模式与递归：转换器遵循常见 glob 语义 —— 仅当源路径包含 `**`（例如 `dir/**/*`）时会使用递归拷贝（生成 `File /r`）。单层 `dir/*` 为非递归。若需要把源目录当作一个根文件夹复制到目标下（例如将 `/a/b/c` 拷贝为 `/m/n/c/...`），可以在 `FileEntry` 或 `packages` 源中使用 `preserve_root: true`。
-- post_install：包级 `post_install` 命令会在对应包的 Section 中以 `ExecWait` 的形式执行，适合像驱动安装之类的后置步骤。示例：
+### BuildContext 模式
 
-```yaml
-packages:
-  Drivers:
-    children:
-      PXI_driver:
-        sources:
-          - source: "./build/.../PXI/**/*"
-            destination: "$INSTDIR\\drivers\\PXI"
-        post_install:
-          - "$INSTDIR\\drivers\\PXI\\installDriver.cmd"
+所有转换子模块通过 `BuildContext` 获取配置和变量解析，**不直接依赖**具体 Converter 实例。
+`BuildContext.target_tool` 字段驱动：
+
+- `create_resolver()` 选择对应后端的变量映射（NSIS / WIX / Inno）
+- `path_separator` 属性根据目标工具返回正确的路径分隔符
+
+这使得每个子模块可以独立测试，也保证了新增后端只需注册到 `CONVERTER_REGISTRY` 即可。
+
+### NSIS 脚本正确性修复（v0.2.0）
+
+| 问题 | 修复 |
+|---|---|
+| `SetOutPath` 未在每组文件前设置 | 每当 destination 变化时重新 emit |
+| `_Contains` 函数死循环 | 重写为 `_StrContains`，正确使用标签和寄存器保存 |
+| `StrReplace`（NSIS 不存在） | 替换为正确的内联字符串操作 |
+| `${BypassUAC}`（不存在） | 替换为 `UserInfo::GetAccountType` |
+| 缺少 `Unicode true` | 默认写入头部 |
+| 卸载不删除 package 文件 | 在 Uninstall Section 中补全 |
+| `SetRegView` 不恢复 | 结束后发出 `SetRegView lastused` |
+| 环境变量修改后不广播 | 添加 `SendMessage ... WM_SETTINGCHANGE` |
+| 远程文件缺少 `inetc.nsh` | 按需 `!include` |
+| 安装大小估算缺失 | 写入 `EstimatedSize` 到注册表 |
+
+### Schema 校验
+
+- 安装 `jsonschema` 时使用 Draft7Validator 做完整校验
+- 未安装时 fallback 到仅检查顶层必需键
+- 由 `PackageConfig.from_yaml()` 自动调用
+
+---
+
+## CLI 子命令
+
+```powershell
+xswl-ypack convert <yaml> [-o output] [-f nsis|wix|inno] [--dry-run] [--build] [--makensis path] [-v]
+xswl-ypack init [-o installer.yaml]
+xswl-ypack validate <yaml> [-v]
 ```
 
-- 注册表视图：`SetRegView` 会改变后续注册表操作所使用的视图（32/64位）。转换器在生成时会在每条带 `view` 的 `registry_entries` 之前插入相应的 `SetRegView`，并在卸载阶段同样在删除前设置视图，以确保写入和删除操作发生在期望的注册表视图中。
-- 签名：签名配置不会自动执行签名（除非在构建后手动使用 signtool），脚本中会留下 `!finalize` 注释提示。
-- 更新：自动更新逻辑需在应用端实现，安装器只负责写入注册表相关配置供应用读取。
+- `convert`：完整转换流程（YAML → 安装脚本），`-f` 选择后端（默认 `nsis`）
+- `init`：生成初始 YAML 模板
+- `validate`：仅执行 schema 校验，不生成脚本
+- 向后兼容：`xswl-ypack installer.yaml` 等价于 `xswl-ypack convert installer.yaml`
+
+---
+
+## 扩展点 ⚙️
+
+- **新的转换后端**：
+  1. 继承 `BaseConverter`，设置 `tool_name` 和 `output_extension`
+  2. 实现 `convert()` / `save()`
+  3. 在 `converters/__init__.py` 的 `CONVERTER_REGISTRY` 中注册
+  4. 可选：在 `BUILD_COMMANDS` 中注册编译命令以支持 `--build`
+  5. `BuildContext`、变量系统、配置解析全部可复用
+- **自定义 NSIS 片段**：通过 `custom_includes.nsis` 注入 `!include`。
+- **Package post_install**：在组件 Section 末尾以 `ExecWait` 执行任意命令。
+
+---
+
+## 测试
+
+```bash
+pytest tests/ -v
+```
+
+98 个测试覆盖：配置解析、变量解析、NSIS 输出、转换器注册表、CLI 子命令（含 `--format`）、Schema 校验、端到端集成。
 
 ---
 
 ## 使用示例
 
-CLI:
+### CLI
 
-```
-python -m ypack.cli examples/simple.yaml --format nsis -o dist/installer.nsi --build --makensis C:\Program Files (x86)\NSIS\makensis.exe -v
+```bash
+xswl-ypack init
+# 编辑 installer.yaml
+xswl-ypack validate installer.yaml -v
+xswl-ypack convert installer.yaml --build -v
+xswl-ypack convert installer.yaml -f nsis -v
 ```
 
-库 API:
+### Python API
 
 ```python
-from ypack.config import PackageConfig
-from ypack.converters.convert_nsis import YamlToNsisConverter
+from ypack import PackageConfig, YamlToNsisConverter, get_converter_class
 
-cfg = PackageConfig.from_yaml("examples/simple.yaml")
-conv = YamlToNsisConverter(cfg)
+# 直接使用
+cfg = PackageConfig.from_yaml("installer.yaml")
+conv = YamlToNsisConverter(cfg, cfg._raw_dict)
 conv.save("dist/installer.nsi")
+
+# 或通过注册表动态选择后端
+ConverterClass = get_converter_class("nsis")  # 或 "wix" / "inno"
+conv = ConverterClass(cfg, cfg._raw_dict)
+script = conv.convert()
 ```
-
----
-
-若需进一步细化 Mermaid 图（例如拆分每个生成函数的内部流程或展示文件列表处理细节），请告诉我需要哪一部分的深度。 ✨

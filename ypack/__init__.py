@@ -1,11 +1,16 @@
 """
-xswl-YPack - A lightweight Windows packaging tool
-Converts YAML configurations to NSIS scripts for building installers
+xswl-YPack — A lightweight Windows packaging tool.
+Converts YAML configurations into installer scripts (NSIS, WIX, Inno Setup, …).
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
-from .converters import YamlToNsisConverter
 from .config import PackageConfig
+from .converters import YamlToNsisConverter, get_converter_class
 
-__all__ = ["YamlToNsisConverter", "PackageConfig"]
+__all__ = [
+    "PackageConfig",
+    "YamlToNsisConverter",
+    "get_converter_class",
+    "__version__",
+]

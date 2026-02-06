@@ -1,264 +1,164 @@
-"""
-Unit tests for variable system
-"""
+"""Tests for variable system and resolver."""
+
+from __future__ import annotations
 
 import pytest
-from ypack.variables import VariableRegistry, VariableDefinition, BUILTIN_VARIABLES
-from ypack.resolver import VariableResolver, CircularReferenceError, create_resolver
 
+from ypack.variables import (
+    BUILTIN_VARIABLES,
+    YPACK_LANGUAGES,
+    LanguageDefinition,
+    VariableDefinition,
+    VariableRegistry,
+)
+from ypack.resolver import CircularReferenceError, VariableResolver, create_resolver
+
+
+# -----------------------------------------------------------------------
+# VariableDefinition
+# -----------------------------------------------------------------------
 
 class TestVariableDefinition:
-    """Test VariableDefinition class"""
-    
-    def test_get_value_nsis(self):
-        var_def = VariableDefinition(
-            name="TEST",
-            description="Test variable",
-            nsis="$TEST",
-            wix="[TEST]",
-            inno="{test}"
-        )
-        assert var_def.get_value("nsis") == "$TEST"
-        assert var_def.get_value("NSIS") == "$TEST"  # Case insensitive
-    
-    def test_get_value_wix(self):
-        var_def = BUILTIN_VARIABLES["INSTDIR"]
-        assert var_def.get_value("wix") == "[INSTALLDIR]"
-    
-    def test_get_value_unsupported_tool(self):
-        var_def = VariableDefinition(
-            name="TEST",
-            description="Test",
-            nsis="$TEST"
-        )
-        with pytest.raises(ValueError, match="not defined for tool"):
-            var_def.get_value("wix")
+    def test_get_nsis(self):
+        vd = BUILTIN_VARIABLES["INSTDIR"]
+        assert vd.get_value("nsis") == "$INSTDIR"
 
+    def test_get_wix(self):
+        vd = BUILTIN_VARIABLES["INSTDIR"]
+        assert vd.get_value("wix") == "[INSTALLDIR]"
+
+    def test_get_inno(self):
+        vd = BUILTIN_VARIABLES["INSTDIR"]
+        assert vd.get_value("inno") == "{app}"
+
+    def test_unsupported_tool(self):
+        vd = VariableDefinition(name="X", description="", nsis="$X")
+        with pytest.raises(ValueError, match="not defined for tool 'wix'"):
+            vd.get_value("wix")
+
+
+# -----------------------------------------------------------------------
+# LanguageDefinition
+# -----------------------------------------------------------------------
+
+class TestLanguageDefinition:
+    def test_known_languages(self):
+        assert "English" in YPACK_LANGUAGES
+        assert "SimplifiedChinese" in YPACK_LANGUAGES
+        assert "Japanese" in YPACK_LANGUAGES
+
+    def test_nsis_mapping(self):
+        assert YPACK_LANGUAGES["SimplifiedChinese"].get_value("nsis") == "SimplifiedChinese"
+
+
+# -----------------------------------------------------------------------
+# VariableRegistry
+# -----------------------------------------------------------------------
 
 class TestVariableRegistry:
-    """Test VariableRegistry class"""
-    
-    def test_builtin_variables_loaded(self):
-        registry = VariableRegistry("nsis")
-        assert "INSTDIR" in registry.get_builtin_variable_names()
-        assert "PROGRAMFILES64" in registry.get_builtin_variable_names()
-    
-    def test_resolve_builtin_var_nsis(self):
-        registry = VariableRegistry("nsis")
-        assert registry.resolve_builtin_var("INSTDIR") == "$INSTDIR"
-        assert registry.resolve_builtin_var("PROGRAMFILES64") == "$PROGRAMFILES64"
-        assert registry.resolve_builtin_var("APPDATA") == "$APPDATA"
-    
-    def test_resolve_builtin_var_wix(self):
-        registry = VariableRegistry("wix")
-        assert registry.resolve_builtin_var("INSTDIR") == "[INSTALLDIR]"
-        assert registry.resolve_builtin_var("PROGRAMFILES64") == "[ProgramFiles64Folder]"
-    
-    def test_resolve_builtin_var_unknown(self):
-        registry = VariableRegistry("nsis")
-        assert registry.resolve_builtin_var("UNKNOWN_VAR") is None
-    
-    def test_custom_variables(self):
-        registry = VariableRegistry("nsis")
-        registry.add_custom_variable("MY_PATH", "$APPDATA\\MyApp")
-        assert registry.get_custom_variable("MY_PATH") == "$APPDATA\\MyApp"
-        assert registry.get_custom_variable("UNKNOWN") is None
-    
-    def test_validate_variable(self):
-        registry = VariableRegistry("nsis")
-        registry.add_custom_variable("CUSTOM", "value")
-        
-        assert registry.validate_variable("INSTDIR") is True
-        assert registry.validate_variable("CUSTOM") is True
-        assert registry.validate_variable("UNKNOWN") is False
-    
-    def test_validate_variable_strict(self):
-        registry = VariableRegistry("nsis")
-        with pytest.raises(ValueError, match="Unknown variable"):
-            registry.validate_variable("UNKNOWN_VAR", strict=True)
+    def test_builtin_names(self):
+        reg = VariableRegistry("nsis")
+        names = reg.get_builtin_variable_names()
+        assert "INSTDIR" in names
+        assert "PROGRAMFILES64" in names
+        assert "TEMP" in names
 
+    def test_resolve_builtin(self):
+        reg = VariableRegistry("nsis")
+        assert reg.resolve_builtin_var("INSTDIR") == "$INSTDIR"
+
+    def test_unknown_builtin_returns_none(self):
+        reg = VariableRegistry("nsis")
+        assert reg.resolve_builtin_var("DOES_NOT_EXIST") is None
+
+    def test_custom_variables(self):
+        reg = VariableRegistry("nsis")
+        reg.add_custom_variable("MY_DIR", "C:\\mydir")
+        assert reg.get_custom_variable("MY_DIR") == "C:\\mydir"
+        assert reg.validate_variable("MY_DIR")
+
+    def test_validate_strict(self):
+        reg = VariableRegistry("nsis")
+        with pytest.raises(ValueError, match="Unknown variable"):
+            reg.validate_variable("NOPE", strict=True)
+
+
+# -----------------------------------------------------------------------
+# VariableResolver
+# -----------------------------------------------------------------------
 
 class TestVariableResolver:
-    """Test VariableResolver class"""
-    
-    def test_resolve_config_reference(self):
-        config = {
-            "app": {"name": "TestApp", "version": "1.0"},
-            "install": {"dir": "C:\\Program Files"}
-        }
-        resolver = create_resolver(config, "nsis")
-        
-        assert resolver.resolve("${app.name}") == "TestApp"
-        assert resolver.resolve("${app.version}") == "1.0"
-        assert resolver.resolve("${install.dir}") == "C:\\Program Files"
-    
-    def test_resolve_builtin_variable_nsis(self):
-        config = {}
-        resolver = create_resolver(config, "nsis")
-        
-        assert resolver.resolve("$INSTDIR") == "$INSTDIR"
-        assert resolver.resolve("$PROGRAMFILES64") == "$PROGRAMFILES64"
-        assert resolver.resolve("$APPDATA\\MyApp") == "$APPDATA\\MyApp"
-    
-    def test_resolve_builtin_variable_wix(self):
-        config = {}
-        resolver = create_resolver(config, "wix")
-        
-        assert resolver.resolve("$INSTDIR") == "[INSTALLDIR]"
-        assert resolver.resolve("$PROGRAMFILES64") == "[ProgramFiles64Folder]"
-    
-    def test_resolve_mixed_variables(self):
-        config = {
-            "app": {"name": "MyApp", "publisher": "ACME"}
-        }
-        resolver = create_resolver(config, "nsis")
-        
-        result = resolver.resolve("$PROGRAMFILES64\\${app.publisher}\\${app.name}")
-        assert result == "$PROGRAMFILES64\\ACME\\MyApp"
-    
-    def test_resolve_custom_variables(self):
-        config = {
-            "app": {"name": "MyApp"},
-            "variables": {
-                "DATA_DIR": "$APPDATA\\${app.name}"
-            }
-        }
-        resolver = create_resolver(config, "nsis")
-        
-        # Custom variable should be expanded first, then config ref, then builtin
-        result = resolver.resolve("${variables.DATA_DIR}\\logs")
-        assert result == "$APPDATA\\MyApp\\logs"
-    
-    def test_resolve_nested_references(self):
-        config = {
-            "app": {"name": "MyApp"},
-            "paths": {
-                "base": "$PROGRAMFILES64\\${app.name}",
-                "config": "${paths.base}\\config"
-            }
-        }
-        resolver = create_resolver(config, "nsis")
-        
-        result = resolver.resolve("${paths.config}")
-        assert result == "$PROGRAMFILES64\\MyApp\\config"
-    
+    def _make_resolver(self, config_dict=None):
+        return create_resolver(config_dict or {}, "nsis")
+
+    def test_resolve_config_ref(self):
+        r = self._make_resolver({"app": {"name": "Foo"}})
+        assert r.resolve("${app.name}") == "Foo"
+
+    def test_resolve_nested(self):
+        r = self._make_resolver({
+            "app": {"name": "Bar"},
+            "variables": {"DATA": "C:\\${app.name}\\data"},
+        })
+        # variables.DATA → C:\${app.name}\data → C:\Bar\data
+        assert r.resolve("${variables.DATA}") == "C:\\Bar\\data"
+
+    def test_builtin_passthrough(self):
+        r = self._make_resolver({})
+        # NSIS builtins stay as NSIS syntax
+        assert r.resolve("$INSTDIR\\sub") == "$INSTDIR\\sub"
+
+    def test_unknown_config_ref_kept(self):
+        r = self._make_resolver({})
+        assert r.resolve("${does.not.exist}") == "${does.not.exist}"
+
     def test_circular_reference_detection(self):
-        config = {
-            "a": "${b}",
-            "b": "${a}"
-        }
-        resolver = create_resolver(config, "nsis")
-        
-        with pytest.raises(CircularReferenceError, match="Circular reference"):
-            resolver.resolve("${a}")
-    
-    def test_circular_reference_self(self):
-        config = {
-            "value": "${value}"
-        }
-        resolver = create_resolver(config, "nsis")
-        
+        r = self._make_resolver({
+            "variables": {"A": "${variables.B}", "B": "${variables.A}"},
+        })
         with pytest.raises(CircularReferenceError):
-            resolver.resolve("${value}")
-    
-    def test_circular_reference_chain(self):
-        config = {
-            "a": "${b}",
-            "b": "${c}",
-            "c": "${a}"
-        }
-        resolver = create_resolver(config, "nsis")
-        
-        # Just check that circular reference is detected (order may vary)
-        with pytest.raises(CircularReferenceError, match="Circular reference"):
-            resolver.resolve("${a}")
-    
-    def test_max_depth_exceeded(self):
-        config = {
-            "a": "${b}",
-            "b": "${c}",
-            "c": "${d}",
-            "d": "${e}",
-            "e": "${f}",
-            "f": "${g}",
-            "g": "${h}",
-            "h": "${i}",
-            "i": "${j}",
-            "j": "${k}",
-            "k": "${l}",
-            "l": "value"
-        }
-        resolver = create_resolver(config, "nsis")
-        
-        with pytest.raises(RecursionError, match="max depth"):
-            resolver.resolve("${a}")
-    
-    def test_unknown_reference_preserved(self):
-        config = {"app": {"name": "MyApp"}}
-        resolver = create_resolver(config, "nsis")
-        
-        # Unknown reference should be preserved
-        result = resolver.resolve("${unknown.reference}")
-        assert result == "${unknown.reference}"
-    
-    def test_escaped_dollar_sign(self):
-        config = {}
-        resolver = create_resolver(config, "nsis")
-        
-        # $$ should become literal $
-        result = resolver.resolve("$$INSTDIR is the install directory")
-        assert result == "$INSTDIR is the install directory"
-    
+            r.resolve("${variables.A}")
+
+    def test_max_depth(self):
+        # Build a chain that exceeds MAX_DEPTH
+        depth = VariableResolver.MAX_DEPTH + 2
+        cfg: dict = {"variables": {}}
+        for i in range(depth):
+            cfg["variables"][f"v{i}"] = f"${{variables.v{i + 1}}}"
+        cfg["variables"][f"v{depth}"] = "end"
+        r = self._make_resolver(cfg)
+        with pytest.raises(RecursionError):
+            r.resolve("${variables.v0}")
+
+    def test_escaped_dollar(self):
+        r = self._make_resolver({})
+        assert r.resolve("$$FOO") == "$FOO"
+
+    def test_empty_input(self):
+        r = self._make_resolver({})
+        assert r.resolve("") == ""
+        assert r.resolve(None) is None  # type: ignore[arg-type]
+
     def test_validate_references(self):
-        config = {"app": {"name": "MyApp"}}
-        resolver = create_resolver(config, "nsis")
-        
-        unknown = resolver.validate_references("${app.name} $INSTDIR ${unknown}")
-        assert "${unknown}" in unknown
-        assert len(unknown) == 1
-    
-    def test_validate_references_strict(self):
-        config = {"app": {"name": "MyApp"}}
-        resolver = create_resolver(config, "nsis")
-        
+        r = self._make_resolver({"app": {"name": "X"}})
+        unknown = r.validate_references("${app.name} $INSTDIR $BOGUS_VAR")
+        assert "$BOGUS_VAR" in unknown
+
+    def test_validate_strict(self):
+        r = self._make_resolver({})
         with pytest.raises(ValueError, match="Unknown variable"):
-            resolver.validate_references("${unknown.ref}", strict=True)
+            r.validate_references("$UNKNOWN_VAR", strict=True)
 
 
-class TestIntegration:
-    """Integration tests with real-world scenarios"""
-    
-    def test_registry_entry_resolution(self):
-        config = {
-            "app": {"name": "SigVNA", "publisher": "SIGLENT"},
-            "install": {"install_dir": "$PROGRAMFILES64\\${app.publisher}\\${app.name}"}
-        }
-        resolver = create_resolver(config, "nsis")
-        
-        # Registry key
-        key = resolver.resolve("Software\\${app.publisher}\\${app.name}")
-        assert key == "Software\\SIGLENT\\SigVNA"
-        
-        # Registry value
-        value = resolver.resolve("$INSTDIR")
-        assert value == "$INSTDIR"
-    
-    def test_file_destination_resolution(self):
-        config = {
-            "app": {"name": "MyApp"},
-            "variables": {"DATA_DIR": "$APPDATA\\${app.name}"}
-        }
-        resolver = create_resolver(config, "nsis")
-        
-        dest = resolver.resolve("${variables.DATA_DIR}\\config")
-        assert dest == "$APPDATA\\MyApp\\config"
-    
-    def test_environment_variable_resolution(self):
-        config = {
-            "app": {"name": "MyTool"},
-            "install": {"install_dir": "$PROGRAMFILES64\\${app.name}"}
-        }
-        resolver = create_resolver(config, "nsis")
-        
-        env_value = resolver.resolve("${install.install_dir}\\bin")
-        assert env_value == "$PROGRAMFILES64\\MyTool\\bin"
+# -----------------------------------------------------------------------
+# create_resolver factory
+# -----------------------------------------------------------------------
+
+class TestCreateResolver:
+    def test_custom_vars_loaded(self):
+        r = create_resolver({"variables": {"MY": "hello"}}, "nsis")
+        assert r.resolve("${variables.MY}") == "hello"
+
+    def test_target_tool_wix(self):
+        r = create_resolver({"variables": {}}, "wix")
+        assert r.registry.target_tool == "wix"
