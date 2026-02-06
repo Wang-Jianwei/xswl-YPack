@@ -94,8 +94,9 @@ class TestInstallerSection:
 
     def test_shortcuts(self):
         cfg = _simple_config()
-        cfg.install.desktop_shortcut_target = "$INSTDIR\\TestApp.exe"
-        cfg.install.start_menu_shortcut_target = "$INSTDIR\\TestApp.exe"
+        from ypack.config import ShortcutConfig
+        cfg.install.desktop_shortcut = ShortcutConfig(name="", target="$INSTDIR\\TestApp.exe")
+        cfg.install.start_menu_shortcut = ShortcutConfig(name="", target="$INSTDIR\\TestApp.exe")
         script = YamlToNsisConverter(cfg).convert()
         assert "CreateShortCut" in script
         assert "$DESKTOP" in script

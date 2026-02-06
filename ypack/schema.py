@@ -66,6 +66,20 @@ _SYSTEM_REQUIREMENTS = {
     },
 }
 
+_SHORTCUT = {
+    "oneOf": [
+        _STRING,
+        {
+            "type": "object",
+            "properties": {
+                "name": _STRING,
+                "target": _STRING,
+            },
+            "required": ["target"],
+        },
+    ],
+}
+
 _FILE_ENTRY = {
     "oneOf": [
         _STRING,
@@ -106,6 +120,8 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "type": "object",
             "properties": {
                 "install_dir": _STRING,
+                "desktop_shortcut": _SHORTCUT,
+                "start_menu_shortcut": _SHORTCUT,
                 "desktop_shortcut_target": _STRING,
                 "start_menu_shortcut_target": _STRING,
                 "registry_entries": {"type": "array", "items": _REGISTRY_ENTRY},

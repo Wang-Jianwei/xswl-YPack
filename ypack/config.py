@@ -113,6 +113,23 @@ class FileAssociation:
 
 
 @dataclass
+class ShortcutConfig:
+    """Shortcut configuration (desktop / start menu)."""
+    name: str = ""
+    target: str = ""
+
+    @classmethod
+    def from_dict(cls, data: Any) -> ShortcutConfig:
+        if isinstance(data, dict):
+            return cls(
+                name=data.get("name", ""),
+                target=data.get("target", ""),
+            )
+        # For backwards compatibility: treat string as target
+        return cls(name="", target=str(data) if data else "")
+
+
+@dataclass
 class SystemRequirements:
     """Pre-installation system checks."""
     min_windows_version: str = ""
@@ -249,8 +266,8 @@ class ExistingInstallConfig:
 class InstallConfig:
     """Installation behaviour configuration."""
     install_dir: str = "$PROGRAMFILES64\\${APP_NAME}"
-    desktop_shortcut_target: str = ""
-    start_menu_shortcut_target: str = ""
+    desktop_shortcut: Optional[ShortcutConfig] = None
+    start_menu_shortcut: Optional[ShortcutConfig] = None
     registry_entries: List[RegistryEntry] = field(default_factory=list)
     env_vars: List[EnvVarEntry] = field(default_factory=list)
     file_associations: List[FileAssociation] = field(default_factory=list)
@@ -298,10 +315,25 @@ class InstallConfig:
         if data.get("allow_multiple_installations"):
             ei.allow_multiple = True
 
+        # Parse shortcuts (support new and legacy formats)
+        desktop_sc = None
+        if "desktop_shortcut" in data:
+            desktop_sc = ShortcutConfig.from_dict(data["desktop_shortcut"])
+        elif "desktop_shortcut_target" in data:
+            # Legacy format compatibility
+            desktop_sc = ShortcutConfig(name="", target=data["desktop_shortcut_target"])
+
+        start_sc = None
+        if "start_menu_shortcut" in data:
+            start_sc = ShortcutConfig.from_dict(data["start_menu_shortcut"])
+        elif "start_menu_shortcut_target" in data:
+            # Legacy format compatibility
+            start_sc = ShortcutConfig(name="", target=data["start_menu_shortcut_target"])
+
         return cls(
             install_dir=data.get("install_dir", "$PROGRAMFILES64\\${app.name}"),
-            desktop_shortcut_target=data.get("desktop_shortcut_target", ""),
-            start_menu_shortcut_target=data.get("start_menu_shortcut_target", ""),
+            desktop_shortcut=desktop_sc,
+            start_menu_shortcut=start_sc,
             registry_entries=registry_entries,
             env_vars=env_vars,
             file_associations=file_associations,

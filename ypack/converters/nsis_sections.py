@@ -157,7 +157,7 @@ def generate_installer_section(ctx: BuildContext) -> List[str]:
 
     # --- Shortcuts ---
     _emit_shortcuts(ctx, lines)
-    if has_logging and (cfg.install.desktop_shortcut_target or cfg.install.start_menu_shortcut_target):
+    if has_logging and (cfg.install.desktop_shortcut or cfg.install.start_menu_shortcut):
         lines.append('  !insertmacro LogWrite "Shortcuts created."')
         lines.append("")
 
@@ -244,19 +244,21 @@ def generate_uninstaller_section(ctx: BuildContext) -> List[str]:
     ])
 
     # Remove shortcuts
-    if cfg.install.desktop_shortcut_target:
+    if cfg.install.desktop_shortcut:
         lines.append("  ; Remove desktop shortcut")
-        lines.append('  Delete "$DESKTOP\\${APP_NAME}.lnk"')
+        desktop_name = ctx.resolve(cfg.install.desktop_shortcut.name) if cfg.install.desktop_shortcut.name else "${APP_NAME}"
+        lines.append(f'  Delete "$DESKTOP\\{desktop_name}.lnk"')
         lines.append("")
 
-    if cfg.install.start_menu_shortcut_target:
+    if cfg.install.start_menu_shortcut:
         lines.append("  ; Remove start menu shortcuts")
-        lines.append('  Delete "$SMPROGRAMS\\${APP_NAME}\\${APP_NAME}.lnk"')
+        start_name = ctx.resolve(cfg.install.start_menu_shortcut.name) if cfg.install.start_menu_shortcut.name else "${APP_NAME}"
+        lines.append(f'  Delete "$SMPROGRAMS\\${{APP_NAME}}\\{start_name}.lnk"')
         lines.append('  Delete "$SMPROGRAMS\\${APP_NAME}\\Uninstall.lnk"')
         lines.append('  RMDir "$SMPROGRAMS\\${APP_NAME}"')
         lines.append("")
 
-    if has_logging and (cfg.install.desktop_shortcut_target or cfg.install.start_menu_shortcut_target):
+    if has_logging and (cfg.install.desktop_shortcut or cfg.install.start_menu_shortcut):
         lines.append('  !insertmacro LogWrite "Shortcuts removed."')
         lines.append("")
 
@@ -421,24 +423,28 @@ def _emit_shortcuts(ctx: BuildContext, lines: List[str]) -> None:
     """Emit CreateShortCut for desktop and start menu."""
     cfg = ctx.config
 
-    desktop_target = cfg.install.desktop_shortcut_target
-    if desktop_target:
-        target = ctx.resolve(desktop_target)
+    desktop_sc = cfg.install.desktop_shortcut
+    if desktop_sc and desktop_sc.target:
+        target = ctx.resolve(desktop_sc.target)
         if not (target.startswith("$") or re.match(r"^[A-Za-z]:\\", target)):
             target = f"$INSTDIR\\{target}"
+        # Use custom name if provided, otherwise use ${APP_NAME}
+        name = ctx.resolve(desktop_sc.name) if desktop_sc.name else "${APP_NAME}"
         lines.append("  ; Desktop shortcut")
-        lines.append(f'  CreateShortCut "$DESKTOP\\${{APP_NAME}}.lnk" "{target}"')
+        lines.append(f'  CreateShortCut "$DESKTOP\\{name}.lnk" "{target}"')
         lines.append("")
 
-    start_target = cfg.install.start_menu_shortcut_target
-    if start_target:
-        target = ctx.resolve(start_target)
+    start_sc = cfg.install.start_menu_shortcut
+    if start_sc and start_sc.target:
+        target = ctx.resolve(start_sc.target)
         if not (target.startswith("$") or re.match(r"^[A-Za-z]:\\", target)):
             target = f"$INSTDIR\\{target}"
+        # Use custom name if provided, otherwise use ${APP_NAME}
+        name = ctx.resolve(start_sc.name) if start_sc.name else "${APP_NAME}"
         lines.extend([
             "  ; Start menu shortcuts",
             '  CreateDirectory "$SMPROGRAMS\\${APP_NAME}"',
-            f'  CreateShortCut "$SMPROGRAMS\\${{APP_NAME}}\\${{APP_NAME}}.lnk" "{target}"',
+            f'  CreateShortCut "$SMPROGRAMS\\${{APP_NAME}}\\{name}.lnk" "{target}"',
             '  CreateShortCut "$SMPROGRAMS\\${APP_NAME}\\Uninstall.lnk" "$INSTDIR\\Uninstall.exe"',
             "",
         ])
