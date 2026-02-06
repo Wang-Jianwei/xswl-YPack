@@ -199,19 +199,30 @@ class TestPackageConfig(unittest.TestCase):
         self.assertFalse(ev.append)
 
     def test_fileentry_download_and_checksum(self):
-        """Test FileEntry parsing of download/checksum/decompress fields"""
+        """Test FileEntry parsing of remote URL source with checksum/decompress fields"""
         data = self.test_yaml.copy()
         data["files"] = [
-            {"source": "remote.bin", "download_url": "https://example.com/remote.bin", "checksum_type": "sha256", "checksum_value": "abcd", "decompress": True}
+            {"source": "https://example.com/remote.bin", "checksum_type": "sha256", "checksum_value": "abcd", "decompress": True}
         ]
         config = PackageConfig.from_dict(data)
         self.assertEqual(len(config.files), 1)
         fe = config.files[0]
-        self.assertEqual(fe.source, "remote.bin")
-        self.assertEqual(fe.download_url, "https://example.com/remote.bin")
+        self.assertEqual(fe.source, "https://example.com/remote.bin")
+        self.assertTrue(fe.is_remote)
         self.assertEqual(fe.checksum_type, "sha256")
         self.assertEqual(fe.checksum_value, "abcd")
         self.assertTrue(fe.decompress)
+
+    def test_fileentry_legacy_download_url(self):
+        """Test backward compatibility: legacy download_url field is migrated to source"""
+        data = self.test_yaml.copy()
+        data["files"] = [
+            {"source": "remote.bin", "download_url": "https://example.com/remote.bin"}
+        ]
+        config = PackageConfig.from_dict(data)
+        fe = config.files[0]
+        self.assertEqual(fe.source, "https://example.com/remote.bin")
+        self.assertTrue(fe.is_remote)
 
     def test_system_requirements_and_file_association(self):
         """Test parsing of system_requirements and file_associations in install config"""

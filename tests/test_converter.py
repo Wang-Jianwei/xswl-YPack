@@ -119,8 +119,8 @@ class TestYamlToNsisConverter(unittest.TestCase):
         section = "\n".join(YamlToNsisConverter(config)._generate_update_section())
         self.assertIn('!define UPDATE_URL "https://upd"', section)
         self.assertIn('!define DOWNLOAD_URL "https://dl"', section)
-        self.assertIn('WriteRegStr HKLM "${REG_KEY}" "BackupOnUpgrade" "${BACKUP_ON_UPGRADE}"', section)
-        self.assertIn('WriteRegStr HKLM "${REG_KEY}" "RepairEnabled" "${REPAIR_ENABLED}"', section)
+        self.assertIn('WriteRegStr HKLM "Software\\${app.name}" "BackupOnUpgrade" "${BACKUP_ON_UPGRADE}"', section)
+        self.assertIn('WriteRegStr HKLM "Software\\${app.name}" "RepairEnabled" "${REPAIR_ENABLED}"', section)
 
     def test_update_registry_scope_and_key(self):
         """Update section should honor registry_hive and registry_key settings"""
@@ -290,7 +290,7 @@ class TestYamlToNsisConverter(unittest.TestCase):
         """Remote file with download/checksum and file association should emit explanatory lines"""
         from ypack.config import FileEntry, FileAssociation
         config = self.simple_config
-        config.files = [FileEntry(source="remote.bin", download_url="https://example.com/remote.bin", checksum_type="sha256", checksum_value="abcd", decompress=True)]
+        config.files = [FileEntry(source="https://example.com/remote.bin", checksum_type="sha256", checksum_value="abcd", decompress=True)]
         config.install.file_associations = [FileAssociation(extension=".foo", prog_id="Foo.File", description="Foo File", application="$INSTDIR\\Foo.exe", default_icon="$INSTDIR\\icons\\foo.ico", verbs={"open": "$INSTDIR\\Foo.exe \"%1\""})]
         script = YamlToNsisConverter(config).convert()
         # Installer should include download and checksum commands

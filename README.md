@@ -8,7 +8,7 @@ A lightweight Windows packaging tool, similar to Electron-Builder.
 
 - 🚀 **语言无关** / Language-agnostic: 支持 C++、Python、Go 等任何语言的项目
 - 📝 **YAML 配置** / YAML-based: 通过简单的 YAML 配置文件定义打包内容
-- 🔍 **可审计** / Auditable: 生成可读的 NSIS 脚本，便于审查和定制
+- 🔍 **可审计** / Auditable: 生成可读的 NSIS/WIX 脚本，便于审查和定制
 - ✍️ **易定制** / Easy to customize: 支持代码签名、自动更新、自定义安装流程
 - 🎯 **轻量级** / Lightweight: 纯 Python 实现，无复杂依赖
 
@@ -315,8 +315,12 @@ languages:
 说明：
 
 - 默认值：如果未指定 `languages`，转换器会使用 `["English"]`。
-- 支持值：使用 NSIS MUI 可识别的语言标识（例如：`English`, `SimplifiedChinese`, `TraditionalChinese`, `French`, `German`, `Spanish`, `Japanese`, `Korean`, `Russian` 等）。
-- 注意：请使用 MUI 的精确标识字符串，转换器会为每个配置项生成一条 `!insertmacro MUI_LANGUAGE "<lang>"` 指令。
+- 支持值：使用 NSIS MUI 可识别的语言标识（大小写敏感）。常见示例包括：
+  `English`, `SimplifiedChinese`, `TraditionalChinese`, `French`, `German`, `Spanish`,
+  `Japanese`, `Korean`, `Russian`, `Polish`, `Portuguese`, `BrazilianPortuguese`,
+  `Czech`, `Turkish`, `Hungarian`。
+- 注意：请使用 MUI 的精确标识字符串，转换器会为每个配置项生成一条 `!insertmacro MUI_LANGUAGE "<lang>"` 指令。该字段主要作用于 NSIS MUI；若目标转换器不支持多语言，此字段可能被忽略。
+- 参考（NSIS MUI 语言）： https://nsis.sourceforge.io/Modern_User_Interface/Language_support
 
 ## 使用示例 / Usage Examples
 

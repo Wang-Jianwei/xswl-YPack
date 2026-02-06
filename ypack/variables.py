@@ -2,11 +2,128 @@
 Variable system for cross-platform installer configuration.
 
 Defines built-in variables and their mappings across different installer tools
-(NSIS, WIX, Inno Setup, etc.).
+(NSIS, WIX, Inno Setup, etc.), as well as language identifiers.
 """
 
 from dataclasses import dataclass
 from typing import Dict, Optional
+
+
+@dataclass
+class LanguageDefinition:
+    """Definition of a ypack language identifier and its tool-specific mappings."""
+    
+    name: str
+    description: str
+    nsis: str  # NSIS MUI language identifier (usually same as ypack name)
+    wix: Optional[str] = None
+    inno: Optional[str] = None
+    
+    def get_value(self, target_tool: str) -> str:
+        """Get the language identifier for a specific installer tool.
+        
+        Args:
+            target_tool: Target installer tool ('nsis', 'wix', 'inno')
+            
+        Returns:
+            Tool-specific language identifier
+            
+        Raises:
+            ValueError: If target_tool is not supported
+        """
+        tool_map = {
+            'nsis': self.nsis,
+            'wix': self.wix,
+            'inno': self.inno,
+        }
+        
+        value = tool_map.get(target_tool.lower())
+        if value is None:
+            raise ValueError(
+                f"Language '{self.name}' is not defined for tool '{target_tool}'. "
+                f"Available tools: {[k for k, v in tool_map.items() if v is not None]}"
+            )
+        return value
+
+
+# ypack language definitions (cross-platform language identifiers)
+YPACK_LANGUAGES: Dict[str, LanguageDefinition] = {
+    "English": LanguageDefinition(
+        name="English",
+        description="English (US)",
+        nsis="English",
+    ),
+    "SimplifiedChinese": LanguageDefinition(
+        name="SimplifiedChinese",
+        description="Simplified Chinese (Mainland China)",
+        nsis="SimplifiedChinese",
+    ),
+    "TraditionalChinese": LanguageDefinition(
+        name="TraditionalChinese",
+        description="Traditional Chinese (Taiwan / Hong Kong)",
+        nsis="TraditionalChinese",
+    ),
+    "French": LanguageDefinition(
+        name="French",
+        description="French (France)",
+        nsis="French",
+    ),
+    "German": LanguageDefinition(
+        name="German",
+        description="German (Germany)",
+        nsis="German",
+    ),
+    "Spanish": LanguageDefinition(
+        name="Spanish",
+        description="Spanish (Spain)",
+        nsis="Spanish",
+    ),
+    "Japanese": LanguageDefinition(
+        name="Japanese",
+        description="Japanese (Japan)",
+        nsis="Japanese",
+    ),
+    "Korean": LanguageDefinition(
+        name="Korean",
+        description="Korean (South Korea)",
+        nsis="Korean",
+    ),
+    "Russian": LanguageDefinition(
+        name="Russian",
+        description="Russian (Russia)",
+        nsis="Russian",
+    ),
+    "Portuguese": LanguageDefinition(
+        name="Portuguese",
+        description="Portuguese (Portugal)",
+        nsis="Portuguese",
+    ),
+    "BrazilianPortuguese": LanguageDefinition(
+        name="BrazilianPortuguese",
+        description="Portuguese (Brazil)",
+        nsis="BrazilianPortuguese",
+    ),
+    "Polish": LanguageDefinition(
+        name="Polish",
+        description="Polish (Poland)",
+        nsis="Polish",
+    ),
+    "Czech": LanguageDefinition(
+        name="Czech",
+        description="Czech (Czech Republic)",
+        nsis="Czech",
+    ),
+    "Turkish": LanguageDefinition(
+        name="Turkish",
+        description="Turkish (Turkey)",
+        nsis="Turkish",
+    ),
+    "Hungarian": LanguageDefinition(
+        name="Hungarian",
+        description="Hungarian (Hungary)",
+        nsis="Hungarian",
+    ),
+}
 
 
 @dataclass

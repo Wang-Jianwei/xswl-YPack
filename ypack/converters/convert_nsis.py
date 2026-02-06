@@ -309,20 +309,21 @@ class YamlToNsisConverter(BaseConverter):
 
         # Add files
         for file_entry in self.config.files:
-            normalized_source = self._normalize_path(file_entry.source)
-            # If file comes from a download URL, generate download + verify logic
-            if getattr(file_entry, 'download_url', None):
-                filename = os.path.basename(file_entry.source)
-                lines.append(f'  ; Download: {file_entry.download_url} -> $INSTDIR\\{filename}')
-                lines.append(f'  inetc::get /silent /url "{file_entry.download_url}" /outfile "$INSTDIR\\{filename}" /end')
+            # Detect remote URL source vs local file
+            if file_entry.is_remote:
+                url = file_entry.source
+                filename = url.rsplit('/', 1)[-1] or 'download'
+                dest = file_entry.destination if file_entry.destination != '$INSTDIR' else '$INSTDIR'
+                lines.append(f'  ; Download: {url} -> {dest}\\{filename}')
+                lines.append(f'  inetc::get /silent /url "{url}" /outfile "{dest}\\{filename}" /end')
                 lines.append('  Pop $0')
                 lines.append('  StrCmp $0 "OK" +2')
                 lines.append('    MessageBox MB_OK "Download failed: $0"')
                 lines.append('    Abort')
-                # Checksum verification (placeholder call to helper)
-                if getattr(file_entry, 'checksum_type', None):
+                # Checksum verification
+                if file_entry.checksum_type:
                     lines.append(f'  ; Verify checksum: {file_entry.checksum_type} {file_entry.checksum_value}')
-                    lines.append(f'  Push "$INSTDIR\\{filename}"')
+                    lines.append(f'  Push "{dest}\\{filename}"')
                     lines.append(f'  Push "{file_entry.checksum_type}"')
                     lines.append(f'  Push "{file_entry.checksum_value}"')
                     lines.append('  Call VerifyChecksum')
@@ -330,14 +331,14 @@ class YamlToNsisConverter(BaseConverter):
                     lines.append('  StrCmp $0 "0" +2')
                     lines.append('    MessageBox MB_OK "Checksum verification failed"')
                     lines.append('    Abort')
-                # Decompression placeholder
-                if getattr(file_entry, 'decompress', False):
-                    lines.append(f'  ; Decompression requested for $INSTDIR\\{filename} (placeholder)')
-                    lines.append(f'  Push "$INSTDIR\\{filename}"')
-                    lines.append('  Push "$INSTDIR"')
+                # Decompression
+                if file_entry.decompress:
+                    lines.append(f'  ; Decompression requested for {dest}\\{filename}')
+                    lines.append(f'  Push "{dest}\\{filename}"')
+                    lines.append(f'  Push "{dest}"')
                     lines.append('  Call ExtractArchive')
-                # If downloaded, we do not use File instruction to copy from source archive
             else:
+                normalized_source = self._normalize_path(file_entry.source)
                 if self._should_use_recursive(file_entry.source):
                     lines.append(f'  File /r "{normalized_source}"')
                 else:

@@ -130,25 +130,37 @@ class InstallConfig:
 
 @dataclass
 class FileEntry:
-    """File entry for installation"""
+    """File entry for installation.
+    
+    source can be a local path or a remote URL (http:// or https://).
+    The converter will automatically detect URLs and generate download logic.
+    """
     source: str
     destination: str = "$INSTDIR"
     recursive: bool = False
-    # Optional download and verification fields for network-sourced files
-    download_url: str = ""
+    # Optional verification and decompression fields
     checksum_type: str = ""
     checksum_value: str = ""
     decompress: bool = False
+
+    @property
+    def is_remote(self) -> bool:
+        """Check if source is a remote URL."""
+        return self.source.startswith("http://") or self.source.startswith("https://")
 
     @classmethod
     def from_dict(cls, data: Any) -> "FileEntry":
         if isinstance(data, str):
             return cls(source=data)
+        # Support legacy 'download_url' field: if present and source is not a URL, use download_url as source
+        source = data.get("source", "")
+        download_url = data.get("download_url", "")
+        if download_url and not (source.startswith("http://") or source.startswith("https://")):
+            source = download_url
         return cls(
-            source=data.get("source", ""),
+            source=source,
             destination=data.get("destination", "$INSTDIR"),
             recursive=data.get("recursive", False),
-            download_url=data.get("download_url", ""),
             checksum_type=data.get("checksum_type", ""),
             checksum_value=data.get("checksum_value", ""),
             decompress=data.get("decompress", False)
@@ -271,7 +283,7 @@ class UpdateConfig:
     check_on_startup: bool = True
     # Registry settings for update metadata (allow writing to HKCU/HKLM and custom key)
     registry_hive: str = "HKLM"
-    registry_key: str = "${REG_KEY}"
+    registry_key: str = "Software\\${app.name}"  # Cross-tool compatible; uses config reference ${app.name}
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "UpdateConfig":
@@ -283,7 +295,7 @@ class UpdateConfig:
             repair_enabled=data.get("repair_enabled", False),
             check_on_startup=data.get("check_on_startup", True),
             registry_hive=data.get("registry_hive", "HKLM"),
-            registry_key=data.get("registry_key", "${REG_KEY}")
+            registry_key=data.get("registry_key", "Software\\${app.name}")
         )
 
 
