@@ -64,6 +64,8 @@ xswl-ypack convert installer.yaml -f nsis
 
 This generates `installer.nsi` in the same directory.
 
+> Note: Generated scripts are written as **UTF-8 with BOM** (`utf-8-sig`) to ensure NSIS correctly handles Unicode characters.
+
 ### 5. Preview without writing a file
 
 ```bash

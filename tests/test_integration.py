@@ -156,6 +156,9 @@ class TestSimpleIntegration:
         out = str(tmp_path / "installer.nsi")
         conv.save(out)
         assert os.path.isfile(out)
+        # NSIS requires UTF-8 with BOM for Unicode handling — check BOM bytes
+        with open(out, "rb") as fh:
+            assert fh.read(3) == b'\xef\xbb\xbf'
         content = open(out, encoding="utf-8").read()
         assert "IntegApp" in content
 

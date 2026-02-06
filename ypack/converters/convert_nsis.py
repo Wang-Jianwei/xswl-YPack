@@ -81,5 +81,8 @@ class YamlToNsisConverter(BaseConverter):
         import os
         self.ctx.output_dir = os.path.dirname(os.path.abspath(output_path))
         script = self.convert()
-        with open(output_path, "w", encoding="utf-8") as fh:
+        # NSIS requires the script file to be encoded as UTF-8 with BOM
+        # when it contains Unicode characters. Use 'utf-8-sig' so Python
+        # writes the BOM automatically at the start of the file.
+        with open(output_path, "w", encoding="utf-8-sig") as fh:
             fh.write(script)

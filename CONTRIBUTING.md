@@ -39,4 +39,6 @@ python -m pytest tests/ -v
 python -m ypack.cli convert tmp/sigvna_installer.yaml -o tmp/sigvna_installer.nsi -v
 ```
 
+> Note: Generated installer scripts are written to disk using **UTF-8 with BOM** (`utf-8-sig`) when saved, which is required for NSIS to correctly interpret Unicode characters in the script.
+
 If you encounter issues, please open an issue with OS/Python version and the failing command output. Thanks! 🎯

@@ -85,6 +85,8 @@ xswl-ypack convert installer.yaml -o dist/installer.nsi
 
 # 预览到标准输出（不写文件）
 xswl-ypack convert installer.yaml --dry-run
+
+> 注意：生成的安装脚本在写入磁盘时会以 **UTF-8 with BOM**（`utf-8-sig`）编码保存，以确保 NSIS 在处理包含 Unicode 字符的脚本时能够正确识别。
 ```
 
 ### 4. 构建安装包 / Build

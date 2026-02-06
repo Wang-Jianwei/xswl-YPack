@@ -32,8 +32,12 @@ flowchart LR
 
   nsis_header & nsis_sections & nsis_packages & nsis_helpers --> Assemble["拼接 → 完整 .nsi 字符串"]
   Assemble --> SaveOrDryRun{"--dry-run?"}
-  SaveOrDryRun -->|否| Save["save() → 写入 installer.nsi"]
+  SaveOrDryRun -->|否| Save["save() → 写入 installer.nsi（UTF-8 with BOM）"]
   SaveOrDryRun -->|是| Stdout["输出到 stdout"]
+
+
+
+> Note: The on-disk script is written using UTF-8 with BOM (`utf-8-sig`) when saved, because NSIS requires a BOM to correctly interpret Unicode characters.
   Save --> OptionalBuild{"--build?"}
   OptionalBuild -->|是| Makensis["调用 makensis"]
   OptionalBuild -->|否| End["完成"]
