@@ -94,6 +94,8 @@ def main(argv: Optional[List[str]] = None) -> None:
     p_conv.add_argument("-v", "--verbose", action="store_true")
     p_conv.add_argument("-n", "--dry-run", action="store_true",
                         help="Print generated script to stdout instead of writing a file")
+    p_conv.add_argument("--installer-name", default=None,
+                        help="Custom installer filename to use when building (overrides config.installer_name)")
 
     # -- init ------------------------------------------------------------
     p_init = sub.add_parser("init", help="Generate a starter YAML configuration")
@@ -160,6 +162,10 @@ def _cmd_convert(args: argparse.Namespace) -> None:
     if args.verbose:
         print(f"Converting YAML → {fmt.upper()} …")
     converter = converter_cls(config, config._raw_dict)
+
+    # Apply CLI override of installer name if provided
+    if getattr(args, "installer_name", None):
+        config.install.installer_name = args.installer_name
 
     if args.dry_run:
         print(converter.convert())
@@ -230,7 +236,12 @@ def _build(args: argparse.Namespace, config: object, fmt: str) -> None:
         )
         if args.verbose:
             print(result.stdout)
-        installer = f"{config.app.name}-{config.app.version}-Setup.exe"  # type: ignore[attr-defined]
+        # Determine installer filename (CLI override -> config -> default)
+        installer_name = getattr(args, "installer_name", None) or (config.install.installer_name or "")
+        if installer_name:
+            installer = installer_name
+        else:
+            installer = f"{config.app.name}-{config.app.version}-Setup.exe"  # type: ignore[attr-defined]
         print(f"Built installer: {installer}")
     except FileNotFoundError:
         print(f"Error: {compiler_cmd} not found. Install {fmt.upper()} or specify the correct path.", file=sys.stderr)

@@ -110,7 +110,7 @@ xswl-ypack --help              # 查看帮助
 xswl-ypack --version           # 版本号
 
 # 子命令
-xswl-ypack convert <yaml> [-o output] [-f nsis|wix|inno] [--dry-run] [--build] [-v]
+xswl-ypack convert <yaml> [-o output] [-f nsis|wix|inno] [--installer-name NAME] [--dry-run] [--build] [-v]
 xswl-ypack init [-o installer.yaml]
 xswl-ypack validate <yaml> [-v]
 
@@ -144,7 +144,9 @@ install:
   start_menu_shortcut_target: "$INSTDIR\\MyApp.exe"
   launch_on_finish: "$INSTDIR\\MyApp.exe"
   launch_on_finish_label: "Launch MyApp"
+  launch_in_background: true
   silent_install: false
+  installer_name: "${APP_NAME}-${APP_VERSION}-Setup.exe"  # 可选：自定义安装包文件名（支持 ${APP_NAME} / ${APP_VERSION} 等工具宏；可被 CLI 的 --installer-name 覆盖）
 ```
 
 ### 文件 / Files

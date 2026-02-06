@@ -110,3 +110,19 @@ class TestVersionFlag:
         with pytest.raises(SystemExit) as exc_info:
             main(["--version"])
         assert exc_info.value.code == 0
+
+
+class TestBuildInstallerName:
+    def test_installer_name_cli_override_prints(self, yaml_file, tmp_path, monkeypatch, capsys):
+        # Simulate successful build by stubbing subprocess.run
+        class DummyRes:
+            stdout = ""
+        def fake_run(cmd, capture_output, text, check):
+            assert cmd[0] in ("makensis", "makensis.exe") or cmd[0].endswith("makensis")
+            return DummyRes()
+        monkeypatch.setattr("subprocess.run", fake_run)
+
+        out = str(tmp_path / "out.nsi")
+        main(["convert", yaml_file, "-o", out, "--build", "--installer-name", "MySetup-2.0.exe"])
+        captured = capsys.readouterr()
+        assert "Built installer: MySetup-2.0.exe" in captured.out

@@ -214,6 +214,7 @@ class InstallConfig:
     launch_on_finish_label: str = ""
     launch_in_background: bool = True
     silent_install: bool = False
+    installer_name: str = ""
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> InstallConfig:
@@ -249,6 +250,7 @@ class InstallConfig:
             launch_on_finish_label=data.get("launch_on_finish_label", ""),
             launch_in_background=data.get("launch_in_background", True),
             silent_install=data.get("silent_install", False),
+            installer_name=data.get("installer_name", ""),
         )
 
 

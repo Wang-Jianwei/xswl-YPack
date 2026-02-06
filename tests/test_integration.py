@@ -214,6 +214,10 @@ class TestFullIntegration:
 
         # Logging
         assert "LogSet on" in nsi
+        # Logging should be enabled inside .onInit (in addition to uninstall logging)
+        start = nsi.index('Function .onInit')
+        end = nsi.index('FunctionEnd', start)
+        assert 'LogSet on' in nsi[start:end]
 
         # Uninstall
         assert 'Section "Uninstall"' in nsi

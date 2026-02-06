@@ -175,6 +175,15 @@ def generate_oninit(ctx: BuildContext) -> List[str]:
                 "",
             ])
 
+    # Installer logging (must be inside a Function)
+    if cfg.logging and cfg.logging.enabled:
+        log_path = cfg.logging.path or "$APPDATA\\${APP_NAME}\\install.log"
+        lines.extend([
+            f'  ; Installer logging: {log_path}',
+            '  LogSet on',
+            "",
+        ])
+
     # Section flags for packages
     flat = _flatten_packages(cfg.packages)
     for idx, pkg in enumerate(flat):

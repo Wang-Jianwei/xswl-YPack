@@ -107,9 +107,11 @@ flowchart LR
 ## CLI 子命令
 
 ```powershell
-xswl-ypack convert <yaml> [-o output] [-f nsis|wix|inno] [--dry-run] [--build] [--makensis path] [-v]
+xswl-ypack convert <yaml> [-o output] [-f nsis|wix|inno] [--installer-name NAME] [--dry-run] [--build] [--makensis path] [-v]
 xswl-ypack init [-o installer.yaml]
 xswl-ypack validate <yaml> [-v]
+
+- `convert`：完整转换流程（YAML → 安装脚本），`-f` 选择后端（默认 `nsis`）。`--installer-name` 可用于在构建时覆盖 `install.installer_name`（若两者都未设置则使用默认 `${APP_NAME}-${APP_VERSION}-Setup.exe`）。
 ```
 
 - `convert`：完整转换流程（YAML → 安装脚本），`-f` 选择后端（默认 `nsis`）

@@ -1,6 +1,16 @@
 # 完整示例 YAML（包含尽可能详尽的字段注释）
 # 该文件可作为语法参考示例，覆盖了项目支持的大多数字段
 
+# 备注：
+# - 原始 YAML 会保存在内部 _raw_dict（PackageConfig._raw_dict）以便变量解析和回溯。
+# - 某些字段（如 PackageEntry.sources）支持多种写法：字符串、字典或列表；post_install 支持字符串或列表。
+# - 变量说明：
+#   - 配置引用（${...}）：用于引用 YAML 配置中的路径，例如 `${app.name}`、`${app.version}` 或 `${variables.DATA_DIR}`。这些在解析阶段由 `VariableResolver` 展开为具体值。
+#   - 内置运行时变量（$VAR）：例如 `$INSTDIR`, `$PROGRAMFILES64`, `$APPDATA`，这些由 `VariablesRegistry` 定义并会在转换为目标安装器时映射到相应格式（NSIS 的 `$INSTDIR` 等），定义见 `ypack/variables.py`。
+#   - 转换器/工具级宏（仅在生成的安装脚本中可用，非跨工具）：例如 NSIS 脚本里会看到的 `${APP_NAME}`, `${APP_VERSION}`, `${REG_KEY}` 等，这些由转换器（如 `convert_nsis.py`）在生成脚本时通过 `!define` 添加到目标脚本；它们不是 YAML 配置路径，不会被 `VariableResolver` 在 YAML 阶段解析。**为保持跨工具兼容性，应避免在 YAML 中直接依赖这类工具特定宏**。
+#   - 自定义变量：例如 `variables.SIGN_PASS`（用于签名密码），可以在 YAML 的 `variables` 部分定义，或通过构建环境/CI 注入。敏感信息不要硬编码在仓库中。
+# - 更多信息请参见 `docs/VARIABLES.md`、`ypack/variables.py` 和 `ypack/converters/convert_nsis.py` 中的实现。
+
 app:
   name: "MyApp"                       # 应用名称（必需）
   version: "1.2.3"                    # 版本号（字符串）
@@ -45,6 +55,7 @@ install:
   launch_on_finish: "$INSTDIR\\bin\\MyApp.exe"     # 完成页复选框选中后运行的路径（可空）
   launch_on_finish_label: "立即启动 MyApp"         # 复选框显示文字（可选）
   launch_in_background: false                      # 启动时是否在后台运行（false 可等待执行完成）
+  installer_name: "${app.name}-${app.version}-Setup.exe"  # 可选：自定义安装包文件名。可被 CLI --installer-name 覆盖
 
 files:
   - "bin/MyApp.exe"                                # 简写：单个 source 字符串，默认 destination=$INSTDIR
@@ -136,13 +147,3 @@ custom_includes:                                   # 针对不同工具的自定
     - "custom/includes/extra.nsh"
   wix:
     - "custom/wix/extensions/ext.wxs"
-
-# 备注：
-# - 原始 YAML 会保存在内部 _raw_dict（PackageConfig._raw_dict）以便变量解析和回溯。
-# - 某些字段（如 PackageEntry.sources）支持多种写法：字符串、字典或列表；post_install 支持字符串或列表。
-# - 变量说明：
-#   - 配置引用（${...}）：用于引用 YAML 配置中的路径，例如 `${app.name}`、`${app.version}` 或 `${variables.DATA_DIR}`。这些在解析阶段由 `VariableResolver` 展开为具体值。
-#   - 内置运行时变量（$VAR）：例如 `$INSTDIR`, `$PROGRAMFILES64`, `$APPDATA`，这些由 `VariablesRegistry` 定义并会在转换为目标安装器时映射到相应格式（NSIS 的 `$INSTDIR` 等），定义见 `ypack/variables.py`。
-#   - 转换器/工具级宏（仅在生成的安装脚本中可用，非跨工具）：例如 NSIS 脚本里会看到的 `${APP_NAME}`, `${APP_VERSION}`, `${REG_KEY}` 等，这些由转换器（如 `convert_nsis.py`）在生成脚本时通过 `!define` 添加到目标脚本；它们不是 YAML 配置路径，不会被 `VariableResolver` 在 YAML 阶段解析。**为保持跨工具兼容性，应避免在 YAML 中直接依赖这类工具特定宏**。
-#   - 自定义变量：例如 `variables.SIGN_PASS`（用于签名密码），可以在 YAML 的 `variables` 部分定义，或通过构建环境/CI 注入。敏感信息不要硬编码在仓库中。
-# - 更多信息请参见 `docs/VARIABLES.md`、`ypack/variables.py` 和 `ypack/converters/convert_nsis.py` 中的实现。

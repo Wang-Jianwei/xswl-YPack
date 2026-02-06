@@ -60,6 +60,9 @@ xswl-ypack convert installer.yaml
 
 # Specify format explicitly (nsis / wix / inno)
 xswl-ypack convert installer.yaml -f nsis
+
+# Build and set custom installer filename
+xswl-ypack convert installer.yaml --build --installer-name "MyApp-1.2.3-Setup.exe"
 ```
 
 This generates `installer.nsi` in the same directory.

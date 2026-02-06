@@ -45,6 +45,25 @@ class TestConverterBasics:
         assert 'Section "Uninstall"' in script
         assert "MUI2.nsh" in script
 
+    def test_includes_filefunc(self):
+        """Ensure helper macros used by the generator are included (regression test).
+        """
+        script = YamlToNsisConverter(_simple_config()).convert()
+        assert '!include "FileFunc.nsh"' in script
+
+    def test_license_define_in_header(self):
+        """LICENSE_FILE should be defined in the header (before MUI2 include)."""
+        cfg = _simple_config(app={"name": "T", "version": "1.0", "publisher": "P", "license": "./LICENSE"})
+        script = YamlToNsisConverter(cfg).convert()
+        assert '!define "LICENSE_FILE"' not in script  # sanity: no malformed define
+        assert '!define LICENSE_FILE' in script
+        assert 'LicenseData "${LICENSE_FILE}"' in script
+        # Ensure both the define and LicenseData are present before the MUI include (general settings)
+        assert script.index('!define LICENSE_FILE') < script.index('!include "MUI2.nsh"')
+        assert script.index('LicenseData "${LICENSE_FILE}"') < script.index('!include "MUI2.nsh"')
+        # Ensure license page insertion occurs after the MUI include
+        assert script.index('!include "MUI2.nsh"') < script.index('!insertmacro MUI_PAGE_LICENSE "${LICENSE_FILE}"')
+
     def test_variable_resolution(self):
         cfg = _simple_config()
         conv = YamlToNsisConverter(cfg, cfg._raw_dict)
@@ -246,6 +265,10 @@ class TestLogging:
         cfg.logging = LoggingConfig(enabled=True, path="$APPDATA\\${APP_NAME}\\install.log", level="DEBUG")
         script = YamlToNsisConverter(cfg).convert()
         assert "LogSet on" in script
+        # Ensure the LogSet is enabled inside .onInit (not just in uninstaller section)
+        start = script.index('Function .onInit')
+        end = script.index('FunctionEnd', start)
+        assert 'LogSet on' in script[start:end]
 
 
 class TestFinishRun:

@@ -48,6 +48,16 @@ def generate_header(ctx: BuildContext) -> List[str]:
             lines.append(f'!define MUI_UNICON "{rel_path}"')
         lines.append("")
 
+    # License file (put near top with other top-level defines)
+    if cfg.app.license:
+        abs_path = ctx.resolve_path(cfg.app.license)
+        if os.path.exists(abs_path):
+            rel_path = ctx.relative_to_output(abs_path)
+            lines.append(f'!define LICENSE_FILE "{rel_path}"')
+        else:
+            lines.append(f"; WARNING: License file not found: {cfg.app.license}")
+            lines.append(f'!define LICENSE_FILE "{cfg.app.license}"')
+
     return lines
 
 
@@ -78,28 +88,25 @@ def generate_general_settings(ctx: BuildContext) -> List[str]:
         'RequestExecutionLevel admin',
     ]
 
+    # License data belongs to general settings (keeps settings grouped together)
+    if cfg.app.license:
+        lines.append('LicenseData "${LICENSE_FILE}"')
+
     # Silent install support
     if cfg.install.silent_install:
         lines.append("SilentInstall silent")
 
-    # License file
-    if cfg.app.license:
-        abs_path = ctx.resolve_path(cfg.app.license)
-        if os.path.exists(abs_path):
-            rel_path = ctx.relative_to_output(abs_path)
-            lines.append(f'!define LICENSE_FILE "{rel_path}"')
-        else:
-            lines.append(f"; WARNING: License file not found: {cfg.app.license}")
-            lines.append(f'!define LICENSE_FILE "{cfg.app.license}"')
-        lines.append('LicenseData "${LICENSE_FILE}"')
 
     # Logging
     if cfg.logging and cfg.logging.enabled:
         log_path = cfg.logging.path or "$APPDATA\\${APP_NAME}\\install.log"
         lines.append(f"; Logging enabled: path={log_path} level={cfg.logging.level}")
-        lines.append("LogSet on")
+        # Note: LogSet must be placed inside a Section or Function (we enable it in .onInit)
         if cfg.logging.path:
             lines.append(f'!define LOG_FILE "{ctx.resolve(cfg.logging.path)}"')
+
+    # Utility includes (provide helper macros used elsewhere, e.g. ${GetSize})
+    lines.append('!include "FileFunc.nsh"')
 
     lines.append("")
     return lines
