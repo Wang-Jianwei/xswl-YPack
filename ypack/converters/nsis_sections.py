@@ -137,11 +137,8 @@ def generate_installer_section(ctx: BuildContext) -> List[str]:
         '  WriteRegDWORD HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "NoModify" 1',
         '  WriteRegDWORD HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "NoRepair" 1',
     ])
-    # DisplayIcon — use install icon if available, else the main exe
-    if cfg.app.install_icon:
-        lines.append('  WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "DisplayIcon" "$INSTDIR\\${MUI_ICON}"')
-    else:
-        lines.append('  WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "DisplayIcon" "$INSTDIR\\Uninstall.exe,0"')
+    # DisplayIcon — use uninstaller's embedded icon (MUI_ICON is embedded during compilation)
+    lines.append('  WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "DisplayIcon" "$INSTDIR\\Uninstall.exe,0"')
     lines.append('  SetRegView lastused')
     lines.append('')
 
