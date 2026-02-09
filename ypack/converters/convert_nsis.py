@@ -27,6 +27,7 @@ from .nsis_packages import (
     generate_signing_section,
     generate_update_section,
     generate_oninstsuccess,
+    generate_package_descriptions,
 )
 from .nsis_sections import generate_installer_section, generate_uninstaller_section
 
@@ -71,6 +72,10 @@ class YamlToNsisConverter(BaseConverter):
         # Main install / uninstall
         parts.extend(generate_installer_section(self.ctx))
         parts.extend(generate_package_sections(self.ctx))
+        
+        # Package descriptions (must come after sections to reference SEC_PKG_X)
+        parts.extend(generate_package_descriptions(self.ctx))
+        
         parts.extend(generate_uninstaller_section(self.ctx))
 
         # Existing-install helper functions (may be referenced by UI callbacks)

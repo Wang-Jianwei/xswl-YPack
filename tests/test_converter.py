@@ -235,6 +235,48 @@ class TestPackageSections:
         script = YamlToNsisConverter(cfg).convert()
         assert 'ExecWait "$INSTDIR\\d\\install.cmd"' in script
 
+    def test_package_description_langstring(self):
+        cfg = PackageConfig.from_dict({
+            "app": {"name": "P2", "version": "1"},
+            "install": {},
+            "files": [],
+            "packages": {"drv": {"sources": [{"source": "d/*", "destination": "$INSTDIR\\d"}], "optional": False, "description": "Driver package"}},
+        })
+        script = YamlToNsisConverter(cfg).convert()
+        # Description should be defined as LangString
+        assert 'LangString DESC_0 ${LANG_ENGLISH} "Driver package"' in script
+        # Description table macros should be present
+        assert '!insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN' in script
+        assert '!insertmacro MUI_DESCRIPTION_TEXT ${SEC_PKG_0} $(DESC_0)' in script
+        assert '!insertmacro MUI_FUNCTION_DESCRIPTION_END' in script
+
+    def test_sectiongroup_description(self):
+        cfg = PackageConfig.from_dict({
+            "app": {"name": "G", "version": "1"},
+            "install": {},
+            "files": [],
+            "packages": {
+                "Drivers": {
+                    "description": "All driver components",
+                    "children": {
+                        "PXI": {"sources": [{"source": "pxi/*", "destination": "$INSTDIR\\pxi"}], "optional": True, "description": "PXI driver"},
+                    }
+                }
+            },
+        })
+        script = YamlToNsisConverter(cfg).convert()
+        # SectionGroup should have an ID when it has a description
+        assert 'SectionGroup /e "Drivers" SEC_GROUP_0' in script
+        # Group description should be defined
+        assert 'LangString DESC_0 ${LANG_ENGLISH} "All driver components"' in script
+        # Child section description should also be defined
+        assert 'LangString DESC_1 ${LANG_ENGLISH} "PXI driver"' in script
+        # Both should be bound in description table
+        assert '!insertmacro MUI_DESCRIPTION_TEXT ${SEC_GROUP_0} $(DESC_0)' in script
+        assert '!insertmacro MUI_DESCRIPTION_TEXT ${SEC_PKG_0} $(DESC_1)' in script
+
+
+
     def test_section_groups(self):
         cfg = PackageConfig.from_dict({
             "app": {"name": "G", "version": "1"},

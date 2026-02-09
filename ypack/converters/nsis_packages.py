@@ -28,11 +28,18 @@ def generate_package_sections(ctx: BuildContext) -> List[str]:
     ]
 
     idx_ref = [0]  # mutable counter shared across recursion
+    group_idx_ref = [0]  # counter for SectionGroup IDs
 
     def _emit(pkg_list: list) -> None:
         for pkg in pkg_list:
             if pkg.children:
-                lines.append(f'SectionGroup "{pkg.name}"')
+                # Assign ID to SectionGroup if it has a description
+                if pkg.description:
+                    group_id = f"SEC_GROUP_{group_idx_ref[0]}"
+                    group_idx_ref[0] += 1
+                    lines.append(f'SectionGroup /e "{pkg.name}" {group_id}')
+                else:
+                    lines.append(f'SectionGroup "{pkg.name}"')
                 _emit(pkg.children)
                 lines.append("SectionGroupEnd")
                 lines.append("")
@@ -73,6 +80,88 @@ def generate_package_sections(ctx: BuildContext) -> List[str]:
                 lines.append("")
 
     _emit(ctx.config.packages)
+    return lines
+
+
+def _collect_all_packages_with_ids(packages) -> list:
+    """Collect all packages (including groups) with their assigned IDs.
+    Returns list of tuples: (pkg, id_str, is_group)
+    """
+    result = []
+    pkg_idx = [0]
+    group_idx = [0]
+    
+    def _collect(pkg_list):
+        for pkg in pkg_list:
+            if pkg.children:
+                # SectionGroup
+                if pkg.description:
+                    group_id = f"SEC_GROUP_{group_idx[0]}"
+                    group_idx[0] += 1
+                    result.append((pkg, group_id, True))
+                _collect(pkg.children)
+            else:
+                # Regular Section
+                sec_id = f"SEC_PKG_{pkg_idx[0]}"
+                pkg_idx[0] += 1
+                result.append((pkg, sec_id, False))
+    
+    _collect(packages)
+    return result
+
+
+def generate_package_descriptions(ctx: BuildContext) -> List[str]:
+    """Emit LangString definitions and MUI_DESCRIPTIONS_TABLE for package descriptions.
+    
+    This allows the Components page to display detailed descriptions of each
+    section (and section group) in the right panel when selected.
+    """
+    if not ctx.config.packages:
+        return []
+    
+    all_pkgs = _collect_all_packages_with_ids(ctx.config.packages)
+    has_descriptions = any(pkg.description for pkg, _, _ in all_pkgs)
+    
+    if not has_descriptions:
+        return []
+    
+    lines: List[str] = [
+        "; ===========================================================================",
+        "; Component Descriptions (displayed in Components page)",
+        "; ===========================================================================",
+        "",
+    ]
+    
+    # Generate LangString definitions for each component/group with a description
+    desc_idx = 0
+    desc_map = {}  # Maps section_id to DESC_xxx variable name
+    
+    for pkg, sec_id, is_group in all_pkgs:
+        if pkg.description:
+            desc_var = f"DESC_{desc_idx}"
+            desc_idx += 1
+            desc_map[sec_id] = desc_var
+            # Escape quotes in description for NSIS string literal
+            desc = pkg.description.replace('"', '$\\"')
+            lines.append(f'LangString {desc_var} ${{LANG_ENGLISH}} "{desc}"')
+    
+    lines.extend([
+        "",
+        "; Bind descriptions to sections",
+        "!insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN",
+    ])
+    
+    # Bind each description to its section or group
+    for pkg, sec_id, is_group in all_pkgs:
+        if pkg.description:
+            desc_var = desc_map[sec_id]
+            lines.append(f'  !insertmacro MUI_DESCRIPTION_TEXT ${{{sec_id}}} $({desc_var})')
+    
+    lines.extend([
+        "!insertmacro MUI_FUNCTION_DESCRIPTION_END",
+        "",
+    ])
+    
     return lines
 
 
