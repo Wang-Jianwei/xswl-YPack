@@ -16,12 +16,13 @@ scripts\setup-venv38.ps1
 ```
 
 This script will:
+
 - create `.venv38` using Python 3.8
 - upgrade pip/setuptools/wheel
 - install the project in editable mode with extras `dev` and `validation`
 - run the test suite to verify everything is working
 
-3. Manually (alternative):
+1. Manually (alternative):
 
 ```powershell
 D:\Python\Python38\python.exe -m venv .venv38
@@ -31,7 +32,7 @@ python -m pip install -e ".[dev,validation]"
 python -m pytest tests/ -v
 ```
 
-4. Running the CLI from the repo without installing via pip:
+1. Running the CLI from the repo without installing via pip:
 
 ```powershell
 # Use the in-repo console script
