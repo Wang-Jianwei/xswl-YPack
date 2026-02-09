@@ -181,7 +181,7 @@ class UpdateConfig:
     repair_enabled: bool = False
     check_on_startup: bool = True
     registry_hive: str = "HKLM"
-    registry_key: str = "Software\\${app.name}"
+    registry_key: str = "Software\\${app.product}\\${app.name}"
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> UpdateConfig:
@@ -193,7 +193,7 @@ class UpdateConfig:
             repair_enabled=data.get("repair_enabled", False),
             check_on_startup=data.get("check_on_startup", True),
             registry_hive=data.get("registry_hive", "HKLM"),
-            registry_key=data.get("registry_key", "Software\\${app.name}"),
+            registry_key=data.get("registry_key", "Software\\${app.product}\\${app.name}"),
         )
 
 

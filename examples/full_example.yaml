@@ -144,13 +144,13 @@ signing:
 
 update:
   enabled: true                                           # 是否启用自动更新支持
-  update_url: "https://updates.example.com/metadata.json" # 检查更新的元数据 URL
-  download_url: "https://updates.example.com/downloads/"  # 更新包下载基础 URL
-  backup_on_upgrade: true                                 # 升级时是否备份旧文件
-  repair_enabled: true                                    # 是否启用修复模式（若支持）
-  check_on_startup: true                                  # 程序启动时是否检查更新
+  update_url: "https://updates.example.com/metadata.json" # 检查更新的元数据 URL（返回 JSON，包含最新版本信息和下载链接）
+  download_url: "https://updates.example.com/downloads/"  # 更新包下载基础 URL（安装程序将根据元数据中的版本信息构建完整下载链接）
+  backup_on_upgrade: true                                 # 升级时是否备份旧文件（以便回滚）
+  repair_enabled: true                                    # 是否启用修复模式（若支持）（安装程序提供修复选项，重新安装当前版本以修复损坏的安装）
+  check_on_startup: true                                  # 程序启动时是否检查更新（如果启用更新功能，安装程序会在应用启动时检查更新）
   registry_hive: "HKCU"                                   # 存储更新元数据所使用的注册表根
-  registry_key: "Software\\${app.name}"                   # 更新元数据的注册表键（跨工具通用写法；使用配置引用 ${app.name}；也可显式覆盖为具体字符串）
+  registry_key: "Software\\${app.product}\\${app.name}"   # 更新元数据的注册表键（跨工具通用写法；使用配置引用 ${app.product} 和 ${app.name}；也可显式覆盖为具体字符串）
 
 logging:
   enabled: true                                    # 是否记录安装过程的日志
