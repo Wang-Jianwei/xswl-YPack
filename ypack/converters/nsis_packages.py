@@ -60,8 +60,12 @@ def generate_package_sections(ctx: BuildContext) -> List[str]:
                     lines.append("  ; Post-install commands")
                     for cmd in pkg.post_install:
                         if has_logging:
-                            lines.append(f'  !insertmacro LogWrite "Running: {cmd}"')
-                        lines.append(f'  ExecWait "{cmd}"')
+                            # Escape double quotes for NSIS string context
+                            log_msg = cmd.replace('"', '$\\"')
+                            lines.append(f'  !insertmacro LogWrite "Running: {log_msg}"')
+                        # Escape double quotes in ExecWait command
+                        exec_cmd = cmd.replace('"', '$\\"')
+                        lines.append(f'  ExecWait "{exec_cmd}"')
 
                 if has_logging:
                     lines.append(f'  !insertmacro LogWrite "Component {pkg.name} done."')
@@ -110,6 +114,51 @@ def generate_update_section(ctx: BuildContext) -> List[str]:
         "SectionEnd",
         "",
     ]
+
+
+def generate_oninstsuccess(ctx: BuildContext) -> List[str]:
+    """Emit ``.onInstSuccess`` — final logging/cleanup after installation.
+
+    Adds "Skipping component: <name>" log entries for optional packages that
+    were not selected by the user. This runs after all sections have executed
+    so sections that were run will have already logged their own messages.
+    """
+    cfg = ctx.config
+    if not (cfg.logging and cfg.logging.enabled):
+        return []
+
+    lines: List[str] = [
+        "; ------------------------------------------------------------------",
+        "; Installer success callback (runs after all sections complete)",
+        "; ------------------------------------------------------------------",
+        "Function .onInstSuccess",
+    ]
+
+    # Emit skip logs for optional packages that were not selected
+    flat = _flatten_packages(cfg.packages)
+    for idx, pkg in enumerate(flat):
+        if pkg.optional:
+            sec = f"SEC_PKG_{idx}"
+            # SectionGetFlags <section> $0 ; IntOp $0 $0 & ${SF_SELECTED}
+            # If result == 0 then section was not selected => log skipping
+            lines.append(f'  SectionGetFlags ${{{sec}}} $0')
+            lines.append('  IntOp $0 $0 & ${SF_SELECTED}')
+            lines.append(f'  StrCmp $0 "0" _pkg_{idx}_skipped _pkg_{idx}_installed')
+            lines.append(f'_pkg_{idx}_skipped:')
+            lines.append(f'  !insertmacro LogWrite "Skipping component: {pkg.name}"')
+            lines.append(f'  Goto _pkg_{idx}_done')
+            lines.append(f'_pkg_{idx}_installed:')
+            lines.append(f'  ; Component {pkg.name} selected/installed (no skip log)')
+            lines.append(f'_pkg_{idx}_done:')
+
+    lines.extend([
+        '  !insertmacro LogWrite "Installation completed successfully."',
+        '  !insertmacro LogClose',
+        'FunctionEnd',
+        '',
+    ])
+
+    return lines
 
 
 def generate_oninit(ctx: BuildContext) -> List[str]:

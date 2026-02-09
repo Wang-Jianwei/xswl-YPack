@@ -173,11 +173,7 @@ def generate_installer_section(ctx: BuildContext) -> List[str]:
     lines.append('  SetRegView lastused')
     lines.append("")
 
-    # --- Logging: end ---
-    if has_logging:
-        lines.append('  !insertmacro LogWrite "Installation completed successfully."')
-        lines.append('  !insertmacro LogClose')
-        lines.append("")
+
 
     lines.append("SectionEnd")
     lines.append("")

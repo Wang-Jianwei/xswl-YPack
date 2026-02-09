@@ -26,6 +26,7 @@ from .nsis_packages import (
     generate_package_sections,
     generate_signing_section,
     generate_update_section,
+    generate_oninstsuccess,
 )
 from .nsis_sections import generate_installer_section, generate_uninstaller_section
 
@@ -74,6 +75,9 @@ class YamlToNsisConverter(BaseConverter):
 
         # Existing-install helper functions (may be referenced by UI callbacks)
         parts.extend(generate_existing_install_helpers(self.ctx))
+
+        # .onInstSuccess: final logging (must be emitted after package sections)
+        parts.extend(generate_oninstsuccess(self.ctx))
 
         # .onInit / un.onInit
         parts.extend(generate_oninit(self.ctx))
