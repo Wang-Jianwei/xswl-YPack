@@ -27,7 +27,8 @@ def simple_yaml(tmp_path):
               description: "Integration test"
             install:
               install_dir: "$PROGRAMFILES64\\\\IntegApp"
-              desktop_shortcut_target: "$INSTDIR\\\\IntegApp.exe"
+              desktop_shortcut:
+                target: "$INSTDIR\\\\IntegApp.exe"
             files:
               - IntegApp.exe
               - source: "data/*"
@@ -55,8 +56,10 @@ def full_yaml(tmp_path):
               license: "LICENSE.txt"
             install:
               install_dir: "$PROGRAMFILES64\\\\FullApp"
-              desktop_shortcut_target: "$INSTDIR\\\\FullApp.exe"
-              start_menu_shortcut_target: "$INSTDIR\\\\FullApp.exe"
+              desktop_shortcut:
+                target: "$INSTDIR\\\\FullApp.exe"
+              start_menu_shortcut:
+                target: "$INSTDIR\\\\FullApp.exe"
               registry_entries:
                 - hive: HKLM
                   key: "Software\\\\FullApp"

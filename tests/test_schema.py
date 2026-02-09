@@ -62,7 +62,7 @@ class TestValidateConfig:
             "app": {"name": "Big", "version": "2.0", "publisher": "P", "description": "D"},
             "install": {
                 "install_dir": "$PROGRAMFILES64\\Big",
-                "desktop_shortcut_target": "$INSTDIR\\Big.exe",
+                "desktop_shortcut": {"target": "$INSTDIR\\Big.exe"},
                 "registry_entries": [
                     {"hive": "HKLM", "key": "Software\\Big", "name": "Path", "value": "$INSTDIR"}
                 ],
@@ -80,6 +80,52 @@ class TestValidateConfig:
             "logging": {"enabled": True, "level": "DEBUG"},
         }
         validate_config(data)  # should not raise
+
+    def test_typo_in_install_section(self):
+        """Typo in field name (desktop_shortcuts → desktop_shortcut) should fail."""
+        data = {
+            "app": {"name": "T"},
+            "install": {
+                "desktop_shortcuts": {"target": "$INSTDIR\\T.exe"}  # TYPO: should be desktop_shortcut
+            },
+        }
+        try:
+            import jsonschema  # noqa: F401
+        except ImportError:
+            pytest.skip("jsonschema not installed")
+        with pytest.raises(ConfigValidationError, match="additionalProperties|desktop_shortcuts"):
+            validate_config(data)
+
+    def test_typo_in_app_section(self):
+        """Typo in app field should fail."""
+        data = {
+            "app": {
+                "name": "T",
+                "publisherr": "P",  # TYPO: should be publisher
+            }
+        }
+        try:
+            import jsonschema  # noqa: F401
+        except ImportError:
+            pytest.skip("jsonschema not installed")
+        with pytest.raises(ConfigValidationError, match="additionalProperties|publisherr"):
+            validate_config(data)
+
+    def test_typo_in_logging_section(self):
+        """Typo in logging field should fail."""
+        data = {
+            "app": {"name": "T"},
+            "logging": {
+                "enabled": True,
+                "levelll": "DEBUG",  # TYPO: should be level
+            }
+        }
+        try:
+            import jsonschema  # noqa: F401
+        except ImportError:
+            pytest.skip("jsonschema not installed")
+        with pytest.raises(ConfigValidationError, match="additionalProperties|levelll"):
+            validate_config(data)
 
 
 class TestConfigValidationError:

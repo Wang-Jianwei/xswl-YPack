@@ -62,8 +62,12 @@ app:
 
 install:
   install_dir: "$PROGRAMFILES64\\${APP_NAME}"
-  desktop_shortcut_target: "$INSTDIR\\MyApp.exe"
-  start_menu_shortcut_target: "$INSTDIR\\MyApp.exe"
+  desktop_shortcut:
+    name: "${app.name}"
+    target: "$INSTDIR\\MyApp.exe"
+  start_menu_shortcut:
+    name: "${app.name}"
+    target: "$INSTDIR\\MyApp.exe"
 
 files:
   - "MyApp.exe"
@@ -140,8 +144,13 @@ app:
 ```yaml
 install:
   install_dir: "$PROGRAMFILES64\\${app.name}"
-  desktop_shortcut_target: "$INSTDIR\\MyApp.exe"
-  start_menu_shortcut_target: "$INSTDIR\\MyApp.exe"
+  desktop_shortcut:
+    name: "${app.name}"
+    target: "$INSTDIR\\MyApp.exe"
+  start_menu_shortcut:
+    name: "${app.name}"
+    target: "$INSTDIR\\MyApp.exe"
+
   launch_on_finish: "$INSTDIR\\MyApp.exe"
   launch_on_finish_label: "Launch MyApp"
   launch_in_background: true
@@ -165,6 +174,13 @@ install:
   #   - Drivers: 30000 - 120000 (30s–2m)
   # Note: when logging is enabled the installer will write "Waiting for uninstaller..." and "Uninstaller finished." messages to the log.
 ```
+
+Shortcut configuration notes:
+
+- `desktop_shortcut` and `start_menu_shortcut` are objects with the following fields:
+  - `target` (required): path to the executable or file to launch (supports `$INSTDIR` and `${...}` variables).
+  - `name` (optional): display name for the shortcut; defaults to `${app.name}` when omitted.
+- Backwards compatibility: the legacy fields `desktop_shortcut_target` and `start_menu_shortcut_target` are still accepted, but the object form is preferred for customizing the shortcut name.
 
 ### 文件 / Files
 

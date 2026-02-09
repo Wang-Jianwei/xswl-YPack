@@ -52,7 +52,7 @@
 |--------|------|---------|------|
 | `AppInfo` | name, version, publisher, description, icon, license | 1, 3, 5, 6, 9, 10, 11, 12, 14, 19 | [L15-L30](../ypack/config.py#L15-L30) |
 | `FileEntry` | source, destination, recursive | 1, 14 | [L75-L90](../ypack/config.py#L75-L90) |
-| `InstallConfig` | install_dir, create_desktop_shortcut, create_start_menu_shortcut, registry_entries | 3, 5, 6, 9, 10, 11, 12 | [L54-L74](../ypack/config.py#L54-L74) |
+| `InstallConfig` | install_dir, desktop_shortcut, start_menu_shortcut, registry_entries | 3, 5, 6, 9, 10, 11, 12 | [L54-L74](../ypack/config.py#L54-L74) |
 | `RegistryEntry` | hive, key, name, value, type, view | 5, 6, 9, 12, 14 | [L37-L52](../ypack/config.py#L37-L52) |
 | `PackageEntry` | name, sources, recursive, optional, default, description, children, **post_install** | 1, 3, 6, 14, 16 | [L94-L180](../ypack/config.py#L94-L180) |
 | `SigningConfig` | enabled, certificate, password, timestamp_url | 19 | [L193-L206](../ypack/config.py#L193-L206) |
@@ -124,7 +124,7 @@ packages:
 
 ### 3. ✅ 创建快捷方式（桌面 / 开始菜单）
 
-**实现方式**: presence of `install.desktop_shortcut_target` and `install.start_menu_shortcut_target` will indicate creation of shortcuts (no boolean flags)  
+**实现方式**: presence of `install.desktop_shortcut` and `install.start_menu_shortcut` (or the legacy `install.desktop_shortcut_target` / `install.start_menu_shortcut_target`) will indicate creation of shortcuts (no boolean flags)  
 **相关代码**:
 
 - [ypack/config.py](../ypack/config.py#L54-L74) - `InstallConfig` 数据类
@@ -135,8 +135,10 @@ packages:
 
 ```yaml
 install:
-  create_desktop_shortcut: true
-  create_start_menu_shortcut: true
+  desktop_shortcut:
+    target: "$INSTDIR\\${APP_NAME}.exe"
+  start_menu_shortcut:
+    target: "$INSTDIR\\${APP_NAME}.exe"
 ```
 
 **生成代码（NSIS）**:

@@ -10,8 +10,10 @@ app:
 
 install:
   install_dir: $PROGRAMFILES64\\{app.publisher}\\{app.name}
-  desktop_shortcut_target: "$INSTDIR\\${app.name}.exe"
-  start_menu_shortcut_target: "$INSTDIR\\${app.name}.exe"
+  desktop_shortcut:
+    target: "$INSTDIR\\${app.name}.exe"
+  start_menu_shortcut:
+    target: "$INSTDIR\\${app.name}.exe"
 
 files:
   # Main executable

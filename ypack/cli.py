@@ -37,8 +37,12 @@ _INIT_TEMPLATE = textwrap.dedent("""\
 
     install:
       install_dir: "$PROGRAMFILES64\\\\${APP_NAME}"
-      desktop_shortcut_target: "$INSTDIR\\\\MyApp.exe"
-      start_menu_shortcut_target: "$INSTDIR\\\\MyApp.exe"
+      desktop_shortcut:
+        name: "${app.name}"
+        target: "$INSTDIR\\MyApp.exe"
+      start_menu_shortcut:
+        name: "${app.name}"
+        target: "$INSTDIR\\MyApp.exe"
 
     files:
       - "MyApp.exe"

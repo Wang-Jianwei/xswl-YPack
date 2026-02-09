@@ -34,19 +34,29 @@ app:
 
 install:
   install_dir: "$PROGRAMFILES64\\MyApp"
-  desktop_shortcut_target: "$INSTDIR\\MyApp.exe"
-  start_menu_shortcut_target: "$INSTDIR\\MyApp.exe"
+  desktop_shortcut:
+    name: "${app.name}"
+    target: "$INSTDIR\\MyApp.exe"
+  start_menu_shortcut:
+    name: "${app.name}"
+    target: "$INSTDIR\\MyApp.exe"
   # existing_install controls behavior when a prior install is found (default: prompt_uninstall)
   # Simple:   existing_install: "prompt_uninstall"
   # Full:     existing_install: { mode: "prompt_uninstall", version_check: true, allow_multiple: false, uninstall_wait_ms: 15000 }
   # Tip: set "uninstall_wait_ms: -1" to wait indefinitely for the previous uninstaller (use with caution)
-
+  existing_install: "prompt_uninstall"
 files:
   - MyApp.exe
   - config.json
 ```
 
+Notes:
+
+- Use `desktop_shortcut` / `start_menu_shortcut` object form to set an explicit `name` (optional) and `target` (required).
+- The legacy `desktop_shortcut_target` / `start_menu_shortcut_target` fields are still accepted for backward compatibility but are deprecated in favor of the structured form.
+
 > **Pattern semantics:**
+>
 > - `dir/*` — direct children only (non-recursive).
 > - `dir/**/*` — recursive (generates `File /r`).
 

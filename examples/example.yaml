@@ -13,8 +13,10 @@ app:
 # Installation configuration
 install:
   install_dir: "$PROGRAMFILES64\\${APP_NAME}"  # Default installation directory
-  desktop_shortcut_target: "$INSTDIR\\${APP_NAME}.exe"  # Create desktop shortcut pointing to this target
-  start_menu_shortcut_target: "$INSTDIR\\${APP_NAME}.exe"  # Create start menu shortcuts pointing to this target
+  desktop_shortcut:
+    target: "$INSTDIR\\${APP_NAME}.exe"  # Create desktop shortcut pointing to this target
+  start_menu_shortcut:
+    target: "$INSTDIR\\${APP_NAME}.exe"  # Create start menu shortcuts pointing to this target
 
 # Files to include in the installer
 files:

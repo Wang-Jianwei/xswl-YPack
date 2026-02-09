@@ -12,54 +12,66 @@
 # - 更多信息请参见 `docs/VARIABLES.md`、`ypack/variables.py` 和 `ypack/converters/convert_nsis.py` 中的实现。
 
 app:
-  name: "MyApp"                       # 应用名称（必需）
-  version: "1.2.3"                    # 版本号（字符串）
-  publisher: "Example Co."            # 发布者/公司
-  description: "示例应用，说明字段"     # 应用描述（用于安装界面等）
-  install_icon: "resources/icons/app.ico"   # 安装程序/快捷方式使用的图标路径（相对或绝对）
+  name: "MyApp"                                   # 应用名称（必需）
+  version: "1.2.3"                                # 版本号（字符串）
+  publisher: "Example Co."                        # 发布者/公司
+  description: "I'm an Example application"       # 应用描述（用于安装界面等）
+  install_icon: "resources/icons/app.ico"         # 安装程序/快捷方式使用的图标路径（相对或绝对）
   uninstall_icon: "resources/icons/uninstall.ico" # 卸载程序使用的图标路径；若未提供，则默认使用 install_icon
-  license: "LICENSE.txt"              # 安装向导中显示的许可文件路径（或文本）
+  license: "LICENSE.txt"                          # 安装向导中显示的许可文件路径（或文本）
 
 install:
-  install_dir: "$PROGRAMFILES64\\${app.name}"  # 安装目标目录（支持内置变量（$VAR）和配置引用（${app.name}））
-  desktop_shortcut_target: "$INSTDIR\\bin\\MyApp.exe" # 桌面快捷方式目标（可选）
-  start_menu_shortcut_target: "$INSTDIR\\bin\\MyApp.exe" # 开始菜单快捷方式目标（可选）
-  registry_entries:                                # 注册表写入项（安装/卸载使用）
-    - hive: "HKLM"                                 # 注册表根：HKLM（系统范围）或 HKCU（用户范围）
-      key: "Software\\MyCompany\\MyApp"            # 注册表键路径
-      name: "InstallPath"                          # 值名
-      value: "$INSTDIR"                            # 值数据（支持变量）
-      type: "string"                               # 类型："string" | "expand" | "dword"
-      view: "auto"                                 # 视图："auto" | "32" | "64"
+  install_dir: "$PROGRAMFILES64\\${app.name}"     # 安装目标目录（支持内置变量（$VAR）和配置引用（${app.name}））
+
+  desktop_shortcut:                               # 桌面快捷方式配置    
+    name: "${app.name}"                           # 桌面快捷方式名称（可选，默认使用应用名）
+    target: "$INSTDIR\\bin\\MyApp.exe"            # 桌面快捷方式目标（可选）
+
+  start_menu_shortcut:                            # 开始菜单快捷方式配置
+    name: "${app.name}"                           # 开始菜单快捷方式名称（可选，默认使用应用名）
+    target: "$INSTDIR\\bin\\MyApp.exe"            # 开始菜单快捷方式目标（可选）
+
+  registry_key: "Software\\${app.publisher}\\${app.name}" # 注册表键路径（用于存储安装信息等）
+  registry_view: "auto"                                   # 注册表视图：auto | 32 | 64（默认 auto，根据系统自动选择）
+
+  registry_entries:                                   # 注册表写入项（安装/卸载使用）
+    - hive: "HKLM"                                    # 注册表根：HKLM（系统范围）或 HKCU（用户范围）
+      key: "Software\\${app.publisher}\\${app.name}"  # 注册表键路径
+      name: "InstallPath"                             # 值名
+      value: "$INSTDIR"                               # 值数据（支持变量）
+      type: "string"                                  # 类型："string" | "expand" | "dword"
+      view: "auto"                                    # 视图："auto" | "32" | "64"
+
   env_vars:                                        # 环境变量配置
     - name: "MYAPP_HOME"                           # 变量名
       value: "$INSTDIR"                            # 值（可包含变量）
       scope: "system"                              # 'system' 写入 HKLM，'user' 写入 HKCU
       remove_on_uninstall: true                    # 卸载时是否移除
       append: false                                # 是否以追加方式处理（例如 PATH）
-  file_associations:                               # 文件关联配置（多个）
-    - extension: ".my"                             # 扩展名（含点）
-      prog_id: "MyCompany.MyApp"                   # ProgID
-      description: "MyApp 文件"                     # 描述
-      application: "$INSTDIR\\bin\\MyApp.exe \"%1\"" # 打开命令（通常包含 "%1"）
-      default_icon: "$INSTDIR\\icons\\myfile.ico"  # 默认图标路径
-      verbs:                                       # 动词映射（verb -> 命令）
-        open: "$INSTDIR\\bin\\MyApp.exe \"%1\""
-        edit: "$INSTDIR\\bin\\MyApp.exe --edit \"%1\""
-      register_for_all_users: true                 # 是否为所有用户注册
+
+  file_associations:                                    # 文件关联配置（多个）
+    - extension: ".my"                                  # 扩展名（含点）
+      prog_id: "${app.publisher}.${app.name}"           # ProgID
+      description: "MyApp file"                         # 描述
+      application: "$INSTDIR\\bin\\MyApp.exe \"%1\""    # 打开命令（通常包含 "%1"）
+      default_icon: "$INSTDIR\\icons\\myfile.ico"       # 默认图标路径
+      verbs:                                            # 动词映射（verb -> 命令）
+        open: "$INSTDIR\\bin\\MyApp.exe \"%1\""         # open 动词
+        edit: "$INSTDIR\\bin\\MyApp.exe --edit \"%1\""  # edit 动词
+      register_for_all_users: true                      # 是否为所有用户注册
+
   system_requirements:                             # 安装前的系统检查
     min_windows_version: "10.0"                    # 最低 Windows 版本（例如 "10.0"）
     min_free_space_mb: 500                         # 所需最小磁盘空间（MB）
     min_ram_mb: 2048                               # 所需最小内存（MB）
     require_admin: true                            # 是否需要管理员权限
+
   launch_on_finish: "$INSTDIR\\bin\\MyApp.exe"     # 完成页复选框选中后运行的路径（可空）
-  launch_on_finish_label: "立即启动 MyApp"         # 复选框显示文字（可选）
+  launch_on_finish_label: "Run ${app.name}"        # 复选框显示文字（可选）
   launch_in_background: false                      # 启动时是否在后台运行（false 可等待执行完成）
+
   installer_name: "${app.name}-${app.version}-Setup.exe"  # 可选：自定义安装包文件名。可被 CLI --installer-name 覆盖
-  # Application registry key — used for install detection, version storage,
-  # and InstallDirRegKey. Supports ${app.xxx} variable substitution.
-  # Default: "Software\{publisher}\{app_name}"
-  registry_key: "Software\\${app.publisher}\\${app.name}"
+
   # Behavior when an existing installation is detected at the target location.
   # Supports two formats:
   #
@@ -67,78 +79,78 @@ install:
   #   existing_install: "prompt_uninstall"
   #
   # Full (object — all fields optional, defaults shown):
-  existing_install:
-    mode: "prompt_uninstall"     # prompt_uninstall | auto_uninstall | overwrite | abort | none
-    version_check: false         # Skip detection if the installed version matches this version
-    allow_multiple: false        # Only detect conflict when installing to the same directory
-    uninstaller_args: "/S"       # CLI args passed to the old uninstaller
-    show_version_info: true      # Show installed version in prompt/abort dialogs
-    uninstall_wait_ms: 5000      # Max time (ms) to wait for the old uninstaller to finish; set to -1 to wait indefinitely (careful!)
+  existing_install:               # 已存在安装时的处理方式
+    mode: "prompt_uninstall"      # prompt_uninstall | auto_uninstall | overwrite | abort | none
+    version_check: false          # Skip detection if the installed version matches this version
+    allow_multiple: false         # Only detect conflict when installing to the same directory
+    uninstaller_args: "/S"        # CLI args passed to the old uninstaller
+    show_version_info: true       # Show installed version in prompt/abort dialogs
+    uninstall_wait_ms: 5000       # Max time (ms) to wait for the old uninstaller to finish; set to -1 to wait indefinitely (careful!)
 
 files:
-  - "bin/MyApp.exe"                                # 简写：单个 source 字符串，默认 destination=$INSTDIR
-  - source: "lib/"                                 # 详细项：支持 recursive 和其他字段
-    destination: "$INSTDIR\\lib"                   # 指定目标路径
-    recursive: true                                # 是否递归复制目录内容
-  - source: "data/config.yaml"                     # 本地文件示例
-    destination: "$INSTDIR\\config"
-    recursive: false
-  - source: "https://example.com/artifacts/plugin.zip" # 远程文件示例：source 直接填 URL（http/https），转换器自动识别为下载
-    destination: "$INSTDIR\\plugins"               # 下载后保存到指定目标目录
-    checksum_type: "sha256"                       # 校验类型：sha256、sha1、md5 等
-    checksum_value: "abc123..."                   # 校验值（用于验证下载完整性）
-    decompress: true                              # 下载后是否自动解压（适用于压缩包）
+  - "bin/MyApp.exe"                                     # 简写：单个 source 字符串，默认 destination=$INSTDIR
+  - source: "lib/"                                      # 详细项：支持 recursive 和其他字段
+    destination: "$INSTDIR\\lib"                        # 指定目标路径
+    recursive: true                                     # 是否递归复制目录内容
+  - source: "data/config.yaml"                          # 本地文件示例
+    destination: "$INSTDIR\\config"                     # 目标路径  
+    recursive: false                                    # 非递归（单个文件）
+  - source: "https://example.com/artifacts/plugin.zip"  # 远程文件示例：source 直接填 URL（http/https），转换器自动识别为下载
+    destination: "$INSTDIR\\plugins"                    # 下载后保存到指定目标目录
+    checksum_type: "sha256"                             # 校验类型：sha256、sha1、md5 等
+    checksum_value: "abc123..."                         # 校验值（用于验证下载完整性）
+    decompress: true                                    # 下载后是否自动解压（适用于压缩包）
 
-packages:                                          # 包/组件配置（支持嵌套 children）
-  Core:                                           # Package 名称（作为组件/Section 名）
-    sources:
-      - source: "bin/*"
-        destination: "$INSTDIR"
-      - source:
-          - "libs/libA.dll"
-          - "libs/libB.dll"
-        destination: "$INSTDIR\\libs"
-    recursive: true
-    optional: false
-    default: true
-    description: "核心功能组件（必须安装）"
-    children:                                     # 子组件（SectionGroup）
-      Tools:
-        sources:
+packages:                                       # 包/组件配置（支持嵌套 children）
+  Core:                                         # Package 名称（作为组件名）
+    sources:                                    # 安装文件源（支持多种写法） 
+      - source: "bin/*"                         # 通配符复制整个目录
+        destination: "$INSTDIR"                 # 目标路径
+      - source:                                 # 多源写法（列表）
+          - "libs/libA.dll"                     # 单个文件  
+          - "libs/libB/**/*"                    # 递归复制子目录  
+        destination: "$INSTDIR\\libs"           # 目标路径
+    recursive: true                             # 是否递归复制目录内容
+    optional: false                             # 是否为可选组件
+    default: true                               # 是否默认勾选安装
+    description: "Core Functionality"           # 组件描述
+    children:                                   # 子组件（SectionGroup）
+      Tools:                                    # 子组件名（此示例为 Tools 组件）   
+        sources:                                # 安装文件源
           - source: "tools/*"
             destination: "$INSTDIR\\tools"
         optional: true
-        default: false
-        description: "可选工具集"
-  Extras:
-    source: "extras/"                              # 兼容旧字段 'source'，会被转换为 sources 列表
-    destination: "$INSTDIR\\extras"
-    recursive: true
-    optional: true
-    default: false
-    description: "额外插件"
-    post_install:                                  # 安装后要执行的命令（字符串或列表）
-      - "$INSTDIR\\tools\\configure.bat"
+        default: false                          # 默认不勾选
+        description: "Optional Tools"
+  Extras:                                       # 另一个组件示例
+    source: "extras/"                           # 安装文件源
+    destination: "$INSTDIR\\extras"             # 目标路径
+    recursive: true                             # 是否递归复制目录内容
+    optional: true                              # 是否为可选组件
+    default: false                              # 默认不勾选
+    description: "Extra Plugins and Add-ons"    # 组件描述
+    post_install:                               # 安装后要执行的命令（字符串或列表）
+      - "$INSTDIR\\tools\\configure.bat"        
       - "echo \"Extras installed\" >> \"$INSTDIR\\install.log\""
 
 signing:
-  enabled: true                                    # 是否启用代码签名
-  certificate: "certs/MyCodeSign.pfx"              # 签名证书（PFX）路径
-  password: "${variables.SIGN_PASS}"                         # 证书密码（示例：使用配置中的自定义变量 `variables.SIGN_PASS`；敏感信息建议通过环境或 CI 注入，不要直接写入 YAML）
+  enabled: true                                   # 是否启用代码签名
+  certificate: "certs/MyCodeSign.pfx"             # 签名证书（PFX）路径
+  password: "${variables.SIGN_PASS}"              # 证书密码（示例：使用配置中的自定义变量 `variables.SIGN_PASS`；敏感信息建议通过环境或 CI 注入，不要直接写入 YAML）
   timestamp_url: "http://timestamp.digicert.com"  # 时间戳服务器
-  verify_signature: true                           # 是否在构建后校验签名
-  checksum_type: "sha256"                          # 可选：用于验证签名/证书的校验类型
-  checksum_value: "..."                            # 可选：校验值
+  verify_signature: true                          # 是否在构建后校验签名
+  checksum_type: "sha256"                         # 可选：用于验证签名/证书的校验类型
+  checksum_value: "..."                           # 可选：校验值
 
 update:
-  enabled: true                                    # 是否启用自动更新支持
+  enabled: true                                           # 是否启用自动更新支持
   update_url: "https://updates.example.com/metadata.json" # 检查更新的元数据 URL
-  download_url: "https://updates.example.com/downloads/" # 更新包下载基础 URL
-  backup_on_upgrade: true                          # 升级时是否备份旧文件
-  repair_enabled: true                             # 是否启用修复模式（若支持）
-  check_on_startup: true                           # 程序启动时是否检查更新
-  registry_hive: "HKCU"                            # 存储更新元数据所使用的注册表根
-  registry_key: "Software\\${app.name}"           # 更新元数据的注册表键（跨工具通用写法；使用配置引用 ${app.name}；也可显式覆盖为具体字符串）
+  download_url: "https://updates.example.com/downloads/"  # 更新包下载基础 URL
+  backup_on_upgrade: true                                 # 升级时是否备份旧文件
+  repair_enabled: true                                    # 是否启用修复模式（若支持）
+  check_on_startup: true                                  # 程序启动时是否检查更新
+  registry_hive: "HKCU"                                   # 存储更新元数据所使用的注册表根
+  registry_key: "Software\\${app.name}"                   # 更新元数据的注册表键（跨工具通用写法；使用配置引用 ${app.name}；也可显式覆盖为具体字符串）
 
 logging:
   enabled: true                                    # 是否记录安装过程的日志
@@ -156,10 +168,10 @@ languages:                                         # 支持的语言列表（ypa
   - French                # 法语示例
   # 可根据需要添加更多语言；若目标转换器不支持某语言，会被忽略或警告
 
-variables:                                         # 自定义变量（可在此处定义供 YAML 解析引用）
-  SIGN_PASS: ""  # 签名证书密码的占位示例；建议在 CI/环境中注入此值，不要直接写入仓库
+variables:              # 自定义变量（可在此处定义供 YAML 解析引用，注意不能和内置变量冲突）
+  SIGN_PASS: "******"   # 签名证书密码的占位示例；建议在 CI/环境中注入此值，不要直接写入仓库
 
-custom_includes:                                   # 针对不同工具的自定义 include 列表（如 nsis/wix）
+custom_includes:  # 针对不同工具的自定义 include 列表（如 nsis/wix）
   nsis:
     - "custom/includes/my_funcs.nsh"
     - "custom/includes/extra.nsh"

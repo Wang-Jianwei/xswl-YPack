@@ -105,6 +105,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
     "properties": {
         "app": {
             "type": "object",
+            "additionalProperties": False,
             "required": ["name"],
             "properties": {
                 "name": _STRING,
@@ -118,6 +119,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
         },
         "install": {
             "type": "object",
+            "additionalProperties": False,
             "properties": {
                 "install_dir": _STRING,
                 "desktop_shortcut": _SHORTCUT,
@@ -158,6 +160,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
         "packages": {"type": "object"},
         "signing": {
             "type": "object",
+            "additionalProperties": False,
             "properties": {
                 "enabled": _BOOL,
                 "certificate": _STRING,
@@ -170,6 +173,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
         },
         "update": {
             "type": "object",
+            "additionalProperties": False,
             "properties": {
                 "enabled": _BOOL,
                 "update_url": _STRING,
@@ -183,6 +187,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
         },
         "logging": {
             "type": "object",
+            "additionalProperties": False,
             "properties": {
                 "enabled": _BOOL,
                 "path": _STRING,

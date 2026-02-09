@@ -9,8 +9,10 @@ app:
 
 install:
   install_dir: $LOCALAPPDATA\\${APP_NAME}
-  desktop_shortcut_target: "$INSTDIR\\${app.name}.exe"
-  create_start_menu_shortcut: true
+  desktop_shortcut:
+    target: "$INSTDIR\\${app.name}.exe"
+  start_menu_shortcut:
+    target: "$INSTDIR\\${app.name}.exe"
 
 files:
   # PyInstaller executable
