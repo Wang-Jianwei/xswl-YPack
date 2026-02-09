@@ -133,7 +133,8 @@ class TestUninstallerSection:
 
     def test_removes_shortcuts(self):
         cfg = _simple_config()
-        cfg.install.desktop_shortcut_target = "$INSTDIR\\T.exe"
+        from ypack.config import ShortcutConfig
+        cfg.install.desktop_shortcut = ShortcutConfig(name="", target="$INSTDIR\\T.exe")
         script = YamlToNsisConverter(cfg).convert()
         assert 'Delete "$DESKTOP\\${APP_NAME}.lnk"' in script
 
