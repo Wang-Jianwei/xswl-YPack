@@ -5,11 +5,11 @@
 ### 后端 API（Flask）
 
 **核心文件**
-- ✅ `ypack/web/server.py` - Flask 主服务器
-- ✅ `ypack/web/api/schema.py` - Schema 接口
-- ✅ `ypack/web/api/validate.py` - 验证接口
-- ✅ `ypack/web/api/project.py` - 项目管理接口
-- ✅ `ypack/web/api/variables.py` - 变量辅助接口
+- ✅ `ypack_web/server.py` - Flask 主服务器
+- ✅ `ypack_web/api/schema.py` - Schema 接口
+- ✅ `ypack_web/api/validate.py` - 验证接口
+- ✅ `ypack_web/api/project.py` - 项目管理接口
+- ✅ `ypack_web/api/variables.py` - 变量辅助接口
 
 **API 端点**
 - `GET /api/health` - 健康检查 ✅
@@ -25,7 +25,7 @@
 ### 前端 UI（Vue 3 + Element Plus）
 
 **页面**
-- ✅ `ypack/web/static/index.html` - 单页应用
+- ✅ `ypack_web/static/index.html` - 单页应用
 
 **功能**
 - ✅ 三栏布局（属性编辑 | 代码编辑 | 预览）
@@ -62,7 +62,7 @@ pip install -e ".[web]"
 xswl-ypack-web
 
 # 方式 2: Python 模块
-python -m ypack.web.server
+python -m ypack_web.server
 
 # 方式 3: PowerShell 脚本
 .\scripts\start-web-ui.ps1

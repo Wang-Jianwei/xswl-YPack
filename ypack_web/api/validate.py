@@ -1,34 +1,22 @@
 """
-Removed module.
+Validation API endpoints.
 
-This file was removed from the core package and archived. Use
-`ypack_web.api.validate` instead.
+Validates YAML content and configuration structures.
 """
 
-raise ImportError("The `ypack.web.api.validate` module has been removed. Use `ypack_web.api.validate`.")
+from flask import Blueprint, request, jsonify
+import yaml
+from jsonschema import ValidationError
+
+from ypack.schema import validate_config
+
+bp = Blueprint('validate', __name__, url_prefix='/api/validate')
+
 
 @bp.route('/yaml', methods=['POST'])
 def validate_yaml():
     """
     Validate YAML syntax and structure.
-    
-    Request:
-        {
-            "yaml_content": "app:\\n  name: MyApp\\n  ..."
-        }
-    
-    Response:
-        {
-            "valid": true/false,
-            "errors": [
-                {
-                    "line": 10,
-                    "column": 5,
-                    "message": "Invalid field 'xyz'",
-                    "path": "install.registry_entries[0].hive"
-                }
-            ]
-        }
     """
     data = request.get_json()
     yaml_content = data.get('yaml_content', '')
@@ -79,10 +67,9 @@ def validate_yaml():
             'errors': []
         })
     except ValidationError as e:
-        # Extract validation error details
         path = '.'.join(str(p) for p in e.path) if e.path else ''
         error_info = {
-            'line': 1,  # JSON Schema doesn't provide line numbers
+            'line': 1,
             'column': 1,
             'message': e.message,
             'path': path
@@ -107,20 +94,6 @@ def validate_yaml():
 def validate_config_endpoint():
     """
     Validate configuration dictionary.
-    
-    Request:
-        {
-            "config": {
-                "app": {"name": "MyApp", "version": "1.0"},
-                "install": {...}
-            }
-        }
-    
-    Response:
-        {
-            "valid": true/false,
-            "errors": [...]
-        }
     """
     data = request.get_json()
     config = data.get('config', {})

@@ -41,7 +41,7 @@ xswl-ypack-web
 
 **方法 2：使用 Python 模块**
 ```bash
-python -m ypack.web.server
+python -m ypack_web.server
 ```
 
 **方法 3：自定义参数**
@@ -184,7 +184,7 @@ pip install -e ".[web]" --force-reinstall
 ## 目录结构
 
 ```
-ypack/web/
+ypack_web/
 ├── __init__.py           # 包初始化
 ├── server.py             # Flask 主服务
 ├── api/                  # API 端点

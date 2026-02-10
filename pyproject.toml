@@ -49,7 +49,7 @@ include = ["ypack*"]
 
 [project.scripts]
 xswl-ypack = "ypack.cli:main"
-xswl-ypack-web = "ypack.web.server:main"
+xswl-ypack-web = "ypack_web.server:main"
 
 [project.urls]
 Repository = "https://github.com/Wang-Jianwei/xswl-YPack"

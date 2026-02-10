@@ -1,22 +1,20 @@
 """
-Removed module.
-
-This file was removed from the core package and archived. Use
-`ypack_web.api.project` instead.
+Archived: original `ypack/web/api/project.py`
 """
 
-raise ImportError("The `ypack.web.api.project` module has been removed. Use `ypack_web.api.project`.")
+from flask import Blueprint, request, jsonify
+import yaml
+from typing import Any, Dict
+
+from ypack.config import PackageConfig
+
+bp = Blueprint('project', __name__, url_prefix='/api/project')
+
 
 def config_to_dict(config: PackageConfig) -> Dict[str, Any]:
-    """
-    Convert PackageConfig to a dictionary suitable for JSON serialization.
-    
-    This returns the original _raw_dict for perfect round-trip fidelity.
-    """
     if config._raw_dict:
         return config._raw_dict
     
-    # Fallback: manually serialize (shouldn't normally be needed)
     result = {
         'app': {
             'name': config.app.name,
@@ -30,7 +28,6 @@ def config_to_dict(config: PackageConfig) -> Dict[str, Any]:
         'install': {}
     }
     
-    # Add other fields as needed
     if config.files:
         result['files'] = []
         for f in config.files:
@@ -48,27 +45,9 @@ def config_to_dict(config: PackageConfig) -> Dict[str, Any]:
 
 @bp.route('/new', methods=['POST'])
 def new_project():
-    """
-    Create a new empty project.
-    
-    Request:
-        {
-            "name": "MyInstaller"
-        }
-    
-    Response:
-        {
-            "config": {
-                "app": {"name": "MyInstaller", "version": "1.0.0"},
-                "install": {},
-                ...
-            }
-        }
-    """
     data = request.get_json() or {}
     name = data.get('name', 'MyApp')
     
-    # Create minimal valid configuration
     config_dict = {
         'app': {
             'name': name,
@@ -86,21 +65,6 @@ def new_project():
 
 @bp.route('/load', methods=['POST'])
 def load_project():
-    """
-    Load a project from YAML content.
-    
-    Request:
-        {
-            "yaml_content": "app:\\n  name: MyApp\\n  ..."
-        }
-    
-    Response:
-        {
-            "config": {...},
-            "valid": true,
-            "errors": []
-        }
-    """
     data = request.get_json()
     yaml_content = data.get('yaml_content', '')
     
@@ -112,7 +76,6 @@ def load_project():
         }), 400
     
     try:
-        # Parse YAML to dict
         config_dict = yaml.safe_load(yaml_content)
         
         if config_dict is None:
@@ -122,11 +85,10 @@ def load_project():
                 'errors': [{'message': 'YAML is empty'}]
             }), 400
         
-        # Validate by trying to create PackageConfig
         config = PackageConfig.from_dict(config_dict)
         
         return jsonify({
-            'config': config_dict,  # Return original dict for perfect fidelity
+            'config': config_dict,
             'valid': True,
             'errors': []
         })
@@ -151,23 +113,6 @@ def load_project():
 
 @bp.route('/save', methods=['POST'])
 def save_project():
-    """
-    Convert configuration to YAML.
-    
-    Request:
-        {
-            "config": {
-                "app": {"name": "MyApp", ...},
-                "install": {...},
-                ...
-            }
-        }
-    
-    Response:
-        {
-            "yaml_content": "app:\\n  name: MyApp\\n  ..."
-        }
-    """
     data = request.get_json()
     config = data.get('config', {})
     
@@ -178,7 +123,6 @@ def save_project():
         }), 400
     
     try:
-        # Convert to YAML with nice formatting
         yaml_content = yaml.dump(
             config,
             allow_unicode=True,

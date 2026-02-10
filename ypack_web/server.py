@@ -1,11 +1,42 @@
 """
-Removed module.
+YPack Web UI Server.
 
-The `ypack.web.server` module has been removed from the core package. Use
-`ypack_web.server` instead.
+Flask application providing REST API and serving the frontend.
 """
 
-raise ImportError("The `ypack.web.server` module has been removed. Use `ypack_web.server`.")
+import os
+from flask import Flask, send_from_directory
+from flask_cors import CORS
+
+from ypack_web.api import schema, validate, project, variables
+
+
+def create_app(test_config=None):
+    """Create and configure the Flask application."""
+    app = Flask(__name__, 
+                static_folder='static',
+                static_url_path='')
+    
+    # Enable CORS for development
+    CORS(app)
+    
+    # Load config
+    if test_config is None:
+        app.config.from_mapping(
+            SECRET_KEY='dev',
+            JSON_AS_ASCII=False,  # Support Unicode in JSON responses
+            JSON_SORT_KEYS=False,  # Preserve key order
+        )
+    else:
+        app.config.from_mapping(test_config)
+    
+    # Register blueprints
+    app.register_blueprint(schema.bp)
+    app.register_blueprint(validate.bp)
+    app.register_blueprint(project.bp)
+    app.register_blueprint(variables.bp)
+    
+    # Serve frontend
     @app.route('/')
     def index():
         return send_from_directory(app.static_folder, 'index.html')

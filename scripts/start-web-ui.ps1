@@ -63,7 +63,7 @@ for ($i = 0; $i -lt $args.Count; $i++) {
 }
 
 # 构建命令
-$cmd = "python -m ypack.web.server --host $host_addr --port $port"
+$cmd = "python -m ypack_web.server --host $host_addr --port $port"
 if ($debug) {
     $cmd += " --debug"
 }
