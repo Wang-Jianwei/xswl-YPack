@@ -22,16 +22,61 @@ from dataclasses import dataclass, field
 # Leaf data classes (no forward references)
 # ---------------------------------------------------------------------------
 
+
+@dataclass
+class LangText:
+    """Text value supporting single string or per-language overrides."""
+
+    text: str = ""
+    translations: Dict[str, str] = field(default_factory=dict)
+
+    @classmethod
+    def from_value(cls, value: Any) -> LangText:
+        from .languages import resolve_language_name
+
+        if isinstance(value, LangText):
+            return value
+        if isinstance(value, dict):
+            normalized: Dict[str, str] = {}
+            for key, text in value.items():
+                if key is None:
+                    continue
+                canonical = resolve_language_name(str(key))
+                normalized[canonical] = str(text) if text is not None else ""
+            return cls(text="", translations=normalized)
+        if isinstance(value, str):
+            return cls(text=value)
+        if value is None:
+            return cls()
+        return cls(text=str(value))
+
+    def is_empty(self) -> bool:
+        return not self.text and not self.translations
+
+    def get_for_language(self, lang_name: str, field_name: str) -> str:
+        from .languages import resolve_language_name
+
+        if self.translations:
+            canonical = resolve_language_name(lang_name)
+            if canonical not in self.translations:
+                available = ", ".join(sorted(self.translations.keys()))
+                raise ValueError(
+                    f"Missing translation for {field_name}: '{canonical}'. "
+                    f"Available: {available}"
+                )
+            return self.translations[canonical]
+        return self.text
+
 @dataclass
 class AppInfo:
     """Application metadata."""
     name: str
     version: str
     publisher: str = ""
-    description: str = ""
+    description: LangText = field(default_factory=LangText)
     install_icon: str = ""
     uninstall_icon: str = ""
-    license: str = ""
+    license: LangText = field(default_factory=LangText)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> AppInfo:
@@ -39,10 +84,10 @@ class AppInfo:
             name=data.get("name", ""),
             version=data.get("version", "1.0.0"),
             publisher=data.get("publisher", ""),
-            description=data.get("description", ""),
+            description=LangText.from_value(data.get("description", "")),
             install_icon=data.get("install_icon", ""),
             uninstall_icon=data.get("uninstall_icon", data.get("install_icon", "")),
-            license=data.get("license", ""),
+            license=LangText.from_value(data.get("license", "")),
         )
 
 
@@ -93,7 +138,7 @@ class FileAssociation:
     """File type association registered by the installer."""
     extension: str = ""
     prog_id: str = ""
-    description: str = ""
+    description: LangText = field(default_factory=LangText)
     application: str = ""
     default_icon: str = ""
     verbs: Dict[str, str] = field(default_factory=dict)
@@ -104,7 +149,7 @@ class FileAssociation:
         return cls(
             extension=data.get("extension", ""),
             prog_id=data.get("prog_id", ""),
-            description=data.get("description", ""),
+            description=LangText.from_value(data.get("description", "")),
             application=data.get("application", ""),
             default_icon=data.get("default_icon", ""),
             verbs=data.get("verbs", {}),
@@ -273,7 +318,7 @@ class InstallConfig:
     file_associations: List[FileAssociation] = field(default_factory=list)
     system_requirements: Optional[SystemRequirements] = None
     launch_on_finish: str = ""
-    launch_on_finish_label: str = ""
+    launch_on_finish_label: LangText = field(default_factory=LangText)
     launch_in_background: bool = True
     silent_install: bool = False
     installer_name: str = ""
@@ -339,7 +384,9 @@ class InstallConfig:
             file_associations=file_associations,
             system_requirements=sysreq,
             launch_on_finish=data.get("launch_on_finish", ""),
-            launch_on_finish_label=data.get("launch_on_finish_label", ""),
+            launch_on_finish_label=LangText.from_value(
+                data.get("launch_on_finish_label", "")
+            ),
             launch_in_background=data.get("launch_in_background", True),
             silent_install=data.get("silent_install", False),
             installer_name=data.get("installer_name", ""),
@@ -361,7 +408,6 @@ class FileEntry:
     """
     source: str
     destination: str = "$INSTDIR"
-    recursive: bool = False
     checksum_type: str = ""
     checksum_value: str = ""
     decompress: bool = False
@@ -381,7 +427,6 @@ class FileEntry:
         return cls(
             source=source,
             destination=data.get("destination", "$INSTDIR"),
-            recursive=data.get("recursive", False),
             checksum_type=data.get("checksum_type", ""),
             checksum_value=data.get("checksum_value", ""),
             decompress=data.get("decompress", False),
@@ -422,13 +467,10 @@ class PackageEntry:
     """A component / package for modular installation."""
     name: str
     sources: List[Dict[str, str]]
-    recursive: bool = True
+
     optional: bool = False
     default: bool = True
-    description: str = ""
-    # Per-language description overrides.  Keys are canonical ypack language
-    # names; values are translated description strings.
-    description_i18n: Dict[str, str] = field(default_factory=dict)
+    description: LangText = field(default_factory=LangText)
     children: List[PackageEntry] = field(default_factory=list)
     post_install: List[str] = field(default_factory=list)
 
@@ -473,28 +515,22 @@ class PackageEntry:
 
         # Parse description — may be a plain string or a dict of
         # {language_name: translation} for multilingual descriptions.
-        desc_raw = data.get("description", "")
-        if isinstance(desc_raw, dict):
-            # Multilingual description object
-            description = desc_raw.get("English", next(iter(desc_raw.values()), ""))
-            description_i18n = {k: v for k, v in desc_raw.items() if k != "English"}
-        else:
-            description = str(desc_raw) if desc_raw else ""
-            description_i18n = {}
+        description = LangText.from_value(data.get("description", ""))
 
         # Optional explicit i18n overrides (takes precedence)
         explicit_i18n = data.get("description_i18n", {})
         if isinstance(explicit_i18n, dict):
-            description_i18n.update(explicit_i18n)
+            from .languages import resolve_language_name
+            for key, value in explicit_i18n.items():
+                canonical = resolve_language_name(str(key))
+                description.translations[canonical] = str(value) if value is not None else ""
 
         return cls(
             name=name,
             sources=sources,
-            recursive=data.get("recursive", True),
             optional=data.get("optional", False),
             default=data.get("default", True),
             description=description,
-            description_i18n=description_i18n,
             children=children,
             post_install=post_install,
         )

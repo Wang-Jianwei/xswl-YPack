@@ -15,10 +15,14 @@ app:
   name: "MyApp"                                   # 应用名称（必需）
   version: "1.2.3"                                # 版本号（字符串）
   publisher: "Example Co."                        # 发布者/公司
-  description: "I'm an Example application"       # 应用描述（用于安装界面等）
+  description:                                 # 应用描述（支持多语言）
+      en: "I'm an Example application"       # 应用描述（用于安装界面等）
+      zh: "我是一个示例应用程序"
   install_icon: "resources/icons/app.ico"         # 安装程序/快捷方式使用的图标路径（相对或绝对）
   uninstall_icon: "resources/icons/uninstall.ico" # 卸载程序使用的图标路径；若未提供，则默认使用 install_icon
-  license: "LICENSE.txt"                          # 安装向导中显示的许可文件路径（或文本）
+  license:
+    en: "resources/license_en.txt"   # 支持每种语言的许可证文件（转换器会在编译时使用 LicenseLangString 嵌入）
+    zh: "resources/license_zh.txt"   # 简体中文许可文件（可为相对或绝对路径）
 
 install:
   install_dir: "$PROGRAMFILES64\\${app.name}"     # 安装目标目录（支持内置变量（$VAR）和配置引用（${app.name}））
@@ -67,7 +71,9 @@ install:
     require_admin: true                            # 是否需要管理员权限
 
   launch_on_finish: "$INSTDIR\\bin\\MyApp.exe"     # 完成页复选框选中后运行的路径（可空）
-  launch_on_finish_label: "Run ${app.name}"        # 复选框显示文字（可选）
+  launch_on_finish_label:                            # 复选框显示文字（可选，支持多语言）
+    en: "Run ${app.name}"
+    zh: "启动 ${app.name}"
   launch_in_background: false                      # 启动时是否在后台运行（false 可等待执行完成）
 
   installer_name: "${app.name}-${app.version}-Setup.exe"  # 可选：自定义安装包文件名。可被 CLI --installer-name 覆盖
@@ -91,10 +97,10 @@ files:
   - "bin/MyApp.exe"                                     # 简写：单个 source 字符串，默认 destination=$INSTDIR
   - source: "lib/"                                      # 详细项：支持 recursive 和其他字段
     destination: "$INSTDIR\\lib"                        # 指定目标路径
-    recursive: true                                     # 是否递归复制目录内容
+
   - source: "data/config.yaml"                          # 本地文件示例
     destination: "$INSTDIR\\config"                     # 目标路径  
-    recursive: false                                    # 非递归（单个文件）
+
   - source: "https://example.com/artifacts/plugin.zip"  # 远程文件示例：source 直接填 URL（http/https），转换器自动识别为下载
     destination: "$INSTDIR\\plugins"                    # 下载后保存到指定目标目录
     checksum_type: "sha256"                             # 校验类型：sha256、sha1、md5 等
@@ -103,6 +109,9 @@ files:
 
 packages:                                       # 包/组件配置（支持嵌套 children）
   Core:                                         # Package 名称（作为组件名）
+    description: "Core Functionality"           # 组件描述
+    optional: false                             # 是否为可选组件
+    default: true                               # 是否默认勾选安装
     sources:                                    # 安装文件源（支持多种写法） 
       - source: "bin/*"                         # 通配符复制整个目录
         destination: "$INSTDIR"                 # 目标路径
@@ -110,10 +119,6 @@ packages:                                       # 包/组件配置（支持嵌�
           - "libs/libA.dll"                     # 单个文件  
           - "libs/libB/**/*"                    # 递归复制子目录  
         destination: "$INSTDIR\\libs"           # 目标路径
-    recursive: true                             # 是否递归复制目录内容
-    optional: false                             # 是否为可选组件
-    default: true                               # 是否默认勾选安装
-    description: "Core Functionality"           # 组件描述
     children:                                   # 子组件（SectionGroup）
       Tools:                                    # 子组件名（此示例为 Tools 组件）   
         sources:                                # 安装文件源
@@ -123,12 +128,12 @@ packages:                                       # 包/组件配置（支持嵌�
         default: false                          # 默认不勾选
         description: "Optional Tools"
   Extras:                                       # 另一个组件示例
+    description: "Extra Plugins and Add-ons"    # 组件描述
+    optional: true                              # 是否为可选组件
+    default: false                              # 默认不勾选
     source: "extras/"                           # 安装文件源
     destination: "$INSTDIR\\extras"             # 目标路径
     recursive: true                             # 是否递归复制目录内容
-    optional: true                              # 是否为可选组件
-    default: false                              # 默认不勾选
-    description: "Extra Plugins and Add-ons"    # 组件描述
     post_install:                               # 安装后要执行的命令（字符串或列表）
       - "$INSTDIR\\tools\\configure.bat"        
       - "echo \"Extras installed\" >> \"$INSTDIR\\install.log\""
@@ -157,35 +162,16 @@ logging:
   path: "$INSTDIR\\install.log"                    # 日志路径（可为绝对或相对）
   level: "DEBUG"                                   # 日志级别：DEBUG, INFO, WARNING, ERROR
 
-languages:                                         # 支持的语言列表（ypack 跨工具语言标识；由转换器映射到具体工具）
-  # ── 支持两种格式 ──
-  # 简单格式：直接写语言名字符串
-  # 完整格式：对象，可附带自定义翻译覆盖（strings 字段）
-  #
-  # 常见 ypack 语言标识：
-  # 西方语言：English, French, German, Spanish, Italian, Dutch, Portuguese, BrazilianPortuguese,
-  #          Russian, Polish, Czech, Hungarian, Turkish, Swedish, Norwegian, Danish, Finnish
-  # 亚洲语言：SimplifiedChinese, TraditionalChinese, Japanese, Korean, Thai, Vietnamese
-  # 其他：    Arabic, Hebrew, Ukrainian, Greek
-  #
+languages:                                         # 支持的语言列表（ypack 跨工具语言标识；由转换器映射到具体工具，建议使用规范名）
+  # 常见 ypack 语言标识（本仓库保留的核心集）：
+  # English, SimplifiedChinese, TraditionalChinese, French, German, Spanish, Italian, Dutch,
+  # Portuguese, BrazilianPortuguese, Japanese, Korean, Russian, Polish, Czech, Hungarian,
+  # Turkish, Swedish, Norwegian, Danish, Ukrainian, Arabic, Thai, Vietnamese
   # 也支持别名（大小写不敏感）：chinese → SimplifiedChinese, zh → SimplifiedChinese,
-  #   en → English, ja → Japanese, ko → Korean, fr → French, de → German ...
-  #
-  # 组件描述的多语言：在 packages 的 description 中可以直接使用 dict 格式或 description_i18n 字段
-  #   description:
-  #     English: "Main files"
-  #     SimplifiedChinese: "主要文件"
-  #   或:
-  #   description: "Main files"
-  #   description_i18n:
-  #     SimplifiedChinese: "主要文件"
-  - English                     # 简单格式：使用内置翻译
-  - name: SimplifiedChinese     # 完整格式：可附带自定义字符串
-    strings:
-      finish_run: "启动 ${APP_NAME}"       # 覆盖完成页"运行"按钮文本
-  - name: French                # 完整格式：自定义字符串示例
-    strings:
-      shortcuts_page_title: "Options de raccourcis personnalisées"
+  # en → English, ja → Japanese, ko → Korean, fr → French, de → German ...
+  - English
+  - SimplifiedChinese
+  - French
 
 variables:              # 自定义变量（可在此处定义供 YAML 解析引用，注意不能和内置变量冲突）
   SIGN_PASS: "******"   # 签名证书密码的占位示例；建议在 CI/环境中注入此值，不要直接写入仓库

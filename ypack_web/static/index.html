@@ -307,7 +307,6 @@
                     <el-input v-model="newFile.destination" placeholder="$INSTDIR"></el-input>
                 </el-form-item>
                 <el-form-item label="递归">
-                    <el-switch v-model="newFile.recursive"></el-switch>
                 </el-form-item>
             </el-form>
             <template #footer>
@@ -356,7 +355,6 @@
                 const newFile = reactive({
                     source: '',
                     destination: '$INSTDIR',
-                    recursive: false
                 });
                 
                 const yamlPreview = ref('');
@@ -551,7 +549,7 @@
                 function addFile() {
                     newFile.source = '';
                     newFile.destination = '$INSTDIR';
-                    newFile.recursive = false;
+
                     addFileDialog.value = true;
                 }
                 
@@ -566,13 +564,13 @@
                     }
                     
                     // Add as simple string or object
-                    if (newFile.destination === '$INSTDIR' && !newFile.recursive) {
+                    if (newFile.destination === '$INSTDIR') {
                         config.files.push(newFile.source);
                     } else {
                         config.files.push({
                             source: newFile.source,
                             destination: newFile.destination,
-                            recursive: newFile.recursive
+
                         });
                     }
                     

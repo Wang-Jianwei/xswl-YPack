@@ -4,11 +4,26 @@ Project management API endpoints.
 Handles loading, saving, and converting between YAML and JSON.
 """
 
-from flask import Blueprint, request, jsonify
+try:
+    from flask import Blueprint, request, jsonify
+except Exception:
+    # Allow importing this module in test environments without Flask installed.
+    class _StubBlueprint:
+        def route(self, *args, **kwargs):
+            def _dec(f):
+                return f
+            return _dec
+
+    Blueprint = lambda *args, **kwargs: _StubBlueprint()
+    request = None
+
+    def jsonify(x, **kwargs):
+        return x
 import yaml
 from typing import Any, Dict
 
 from ypack.config import PackageConfig
+from ypack.converters.nsis_sections import _should_use_recursive
 
 bp = Blueprint('project', __name__, url_prefix='/api/project')
 
@@ -36,13 +51,18 @@ def config_to_dict(config: PackageConfig) -> Dict[str, Any]:
     if config.files:
         result['files'] = []
         for f in config.files:
-            if isinstance(f.source, str) and f.destination == "$INSTDIR" and not f.recursive:
-                result['files'].append(f.source)
+            # Detect recursive source patterns ("**") and expose a `recursive` flag
+            # to the UI so it can render directory-copy semantics.
+            if isinstance(f.source, str) and _should_use_recursive(f.source):
+                result['files'].append({
+                    'source': f.source,
+                    'destination': f.destination,
+                    'recursive': True,
+                })
             else:
                 result['files'].append({
                     'source': f.source,
                     'destination': f.destination,
-                    'recursive': f.recursive
                 })
     
     return result

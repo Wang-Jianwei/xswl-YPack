@@ -207,7 +207,7 @@ class TestFullIntegration:
         assert 'Function Finish_Leave' in nsi
         # When languages are configured, finish page uses localized LangString
         assert '$(FINISHPAGE_RUN_TEXT)' in nsi
-        assert 'LangString FINISHPAGE_RUN_TEXT ${LANG_ENGLISH} "Run ${APP_NAME}"' in nsi
+        assert 'LangString FINISHPAGE_RUN_TEXT ${LANG_ENGLISH} "Launch FullApp"' in nsi
 
         # Packages
         assert 'Section "App"' in nsi

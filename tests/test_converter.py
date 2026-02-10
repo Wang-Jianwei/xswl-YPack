@@ -11,6 +11,7 @@ from ypack.config import (
     FileAssociation,
     FileEntry,
     InstallConfig,
+    LangText,
     LanguageConfig,
     LoggingConfig,
     PackageConfig,
@@ -54,17 +55,14 @@ class TestConverterBasics:
         assert '!include "FileFunc.nsh"' in script
 
     def test_license_define_in_header(self):
-        """LICENSE_FILE should be defined in the header (before MUI2 include)."""
+        """License page should use MUI_PAGE_LICENSE with LicenseLangString or direct path."""
         cfg = _simple_config(app={"name": "T", "version": "1.0", "publisher": "P", "license": "./LICENSE"})
         script = YamlToNsisConverter(cfg).convert()
-        assert '!define "LICENSE_FILE"' not in script  # sanity: no malformed define
-        assert '!define LICENSE_FILE' in script
-        assert 'LicenseData "${LICENSE_FILE}"' in script
-        # Ensure both the define and LicenseData are present before the MUI include (general settings)
-        assert script.index('!define LICENSE_FILE') < script.index('!include "MUI2.nsh"')
-        assert script.index('LicenseData "${LICENSE_FILE}"') < script.index('!include "MUI2.nsh"')
-        # Ensure license page insertion occurs after the MUI include
-        assert script.index('!include "MUI2.nsh"') < script.index('!insertmacro MUI_PAGE_LICENSE "${LICENSE_FILE}"')
+        assert '!define MUI_LICENSEPAGE_CHECKBOX' in script
+        assert 'MUI_PAGE_LICENSE' in script
+        # Should NOT use old custom page approach
+        assert 'Function License_Create' not in script
+        assert 'Page custom License_Create License_Leave' not in script
 
     def test_variable_resolution(self):
         cfg = _simple_config()
@@ -142,7 +140,7 @@ class TestInstallerSection:
     def test_file_associations(self):
         cfg = _simple_config()
         cfg.install.file_associations = [
-            FileAssociation(extension=".foo", prog_id="Foo.File", description="Foo", application="$INSTDIR\\Foo.exe", default_icon="$INSTDIR\\icons\\foo.ico", verbs={"open": '$INSTDIR\\Foo.exe "%1"'}),
+            FileAssociation(extension=".foo", prog_id="Foo.File", description=LangText.from_value("Foo"), application="$INSTDIR\\Foo.exe", default_icon="$INSTDIR\\icons\\foo.ico", verbs={"open": '$INSTDIR\\Foo.exe "%1"'}),
         ]
         script = YamlToNsisConverter(cfg).convert()
         assert 'WriteRegStr HKCR ".foo"' in script
@@ -335,10 +333,8 @@ class TestLanguages:
         assert 'MUI_LANGUAGE "English"' in script
         # SimplifiedChinese is mapped to SimpChinese (actual NSIS language file name)
         assert 'MUI_LANGUAGE "SimpChinese"' in script
-        # Custom language intro page is used instead of MUI_PAGE_LANGUAGE
-        assert 'Page custom LangSelect_Create LangSelect_Leave' in script
-        assert 'Function LangSelect_Create' in script
-        assert 'LangString LANGPAGE_DESC ${LANG_ENGLISH} "Select which language the installer should use."' in script
+        # Language selection dialog is shown before UI initialization
+        assert '!insertmacro MUI_LANGDLL_DISPLAY' in script
         # Also ensure alias mapping works for Chinese
         cfg.languages = [LanguageConfig.from_dict("Chinese")]
         script2 = YamlToNsisConverter(cfg).convert()
@@ -398,21 +394,43 @@ class TestFinishRun:
     def test_finish_run(self):
         cfg = _simple_config()
         cfg.install.launch_on_finish = "$INSTDIR\\MyApp.exe"
-        cfg.install.launch_on_finish_label = "Run MyApp"
+        cfg.install.launch_on_finish_label = LangText.from_value("Run MyApp")
         script = YamlToNsisConverter(cfg).convert()
         assert 'Function Finish_Create' in script
         assert 'Function Finish_Leave' in script
         assert 'Page custom Finish_Create Finish_Leave' in script
         # Finish page uses hardcoded text (not LangString) to avoid compile-time references
-        assert '${NSD_CreateCheckBox} 10u 10u 100% 12u "Run ${APP_NAME}"' in script
+        assert '${NSD_CreateCheckBox} 10u 10u 100% 12u "Run MyApp"' in script
 
     def test_finish_run_label_resolution(self):
         cfg = _simple_config()
         cfg.install.launch_on_finish = "$INSTDIR\\MyApp.exe"
-        cfg.install.launch_on_finish_label = "Run ${app.name}"
+        cfg.install.launch_on_finish_label = LangText.from_value("Run ${app.name}")
         script = YamlToNsisConverter(cfg).convert()
         # Finish page uses hardcoded text with resolved app name
-        assert '${NSD_CreateCheckBox} 10u 10u 100% 12u "Run ${APP_NAME}"' in script
+        assert '${NSD_CreateCheckBox} 10u 10u 100% 12u "Run TestApp"' in script
+
+    def test_finish_run_label_i18n(self):
+        cfg = _simple_config()
+        cfg.languages = [LanguageConfig(name="English"), LanguageConfig(name="French")]
+        cfg.install.launch_on_finish = "$INSTDIR\\MyApp.exe"
+        cfg.install.launch_on_finish_label = LangText.from_value({
+            "en": "Run ${app.name}",
+            "fr": "Lancer ${app.name}",
+        })
+        script = YamlToNsisConverter(cfg).convert()
+        assert 'LangString FINISHPAGE_RUN_TEXT ${LANG_ENGLISH} "Run TestApp"' in script
+        assert 'LangString FINISHPAGE_RUN_TEXT ${LANG_FRENCH} "Lancer TestApp"' in script
+
+    def test_finish_run_label_i18n_missing_language_raises(self):
+        cfg = _simple_config()
+        cfg.languages = [LanguageConfig(name="English"), LanguageConfig(name="French")]
+        cfg.install.launch_on_finish = "$INSTDIR\\MyApp.exe"
+        cfg.install.launch_on_finish_label = LangText.from_value({
+            "en": "Run ${app.name}",
+        })
+        with pytest.raises(ValueError, match="launch_on_finish_label"):
+            YamlToNsisConverter(cfg).convert()
 
 
 class TestOnInit:
@@ -465,6 +483,7 @@ class TestOnInit:
 
     def test_existing_install_default_is_prompt(self):
         cfg = _simple_config()
+        assert cfg.install.existing_install is not None
         assert cfg.install.existing_install.mode == "prompt_uninstall"
         script = YamlToNsisConverter(cfg).convert()
         assert 'IDYES _ei_do_uninstall IDNO _ei_cancel' in script
@@ -477,6 +496,7 @@ class TestOnInit:
             "install": {"existing_install": "auto_uninstall"},
             "files": [{"source": "t.exe"}],
         })
+        assert cfg.install.existing_install is not None
         assert cfg.install.existing_install.mode == "auto_uninstall"
 
     # --- Version check ---
@@ -515,6 +535,7 @@ class TestOnInit:
             "install": {"allow_multiple_installations": True},
             "files": [{"source": "t.exe"}],
         })
+        assert cfg.install.existing_install is not None
         assert cfg.install.existing_install.allow_multiple is True
 
     # --- Show version info in prompt ---

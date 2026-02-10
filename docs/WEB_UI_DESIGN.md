@@ -385,6 +385,8 @@ watch(() => editorState.yaml, (newYaml) => {
   axios.post('/api/project/load', { yaml_content: newYaml })
     .then(res => editorState.config = res.data);
 });
+
+> **Note:** The backend `config_to_dict` will annotate file entries when the source pattern implies a recursive copy (i.e., contains `**`). In that case the returned file object includes a boolean `recursive: true` property so the UI can render directory/recursive semantics (for example a checkbox or explanatory label).
 ```
 
 ### 2. PackageEntry 树形编辑

@@ -35,7 +35,7 @@ def generate_package_sections(ctx: BuildContext) -> List[str]:
         for pkg in pkg_list:
             if pkg.children:
                 # Assign ID to SectionGroup if it has a description
-                if pkg.description:
+                if not pkg.description.is_empty():
                     group_id = f"SEC_GROUP_{group_idx_ref[0]}"
                     group_idx_ref[0] += 1
                     lines.append(f'SectionGroup /e "{pkg.name}" {group_id}')
@@ -96,7 +96,7 @@ def _collect_all_packages_with_ids(packages) -> list:
         for pkg in pkg_list:
             if pkg.children:
                 # SectionGroup
-                if pkg.description:
+                if not pkg.description.is_empty():
                     group_id = f"SEC_GROUP_{group_idx[0]}"
                     group_idx[0] += 1
                     result.append((pkg, group_id, True))
@@ -121,7 +121,7 @@ def generate_package_descriptions(ctx: BuildContext) -> List[str]:
         return []
     
     all_pkgs = _collect_all_packages_with_ids(ctx.config.packages)
-    has_descriptions = any(pkg.description for pkg, _, _ in all_pkgs)
+    has_descriptions = any(not pkg.description.is_empty() for pkg, _, _ in all_pkgs)
     
     if not has_descriptions:
         return []
@@ -138,31 +138,38 @@ def generate_package_descriptions(ctx: BuildContext) -> List[str]:
     desc_map = {}  # Maps section_id to DESC_xxx variable name
 
     langs = ctx.config.languages or []
+    if not langs:
+        for pkg, _, _ in all_pkgs:
+            if pkg.description.translations:
+                raise ValueError(
+                    "packages.description requires languages when using per-language values."
+                )
 
     for pkg, sec_id, is_group in all_pkgs:
-        if pkg.description:
+        if not pkg.description.is_empty():
             desc_var = f"DESC_{desc_idx}"
             desc_idx += 1
             desc_map[sec_id] = desc_var
 
             if langs:
                 # Emit a LangString for each configured language.
-                # Use per-language description from description_i18n when
-                # available, otherwise fall back to the default description.
+                # Use per-language description when provided, otherwise fall
+                # back to the default description.
                 for lang_cfg in langs:
                     mapping = get_nsis_mapping(lang_cfg.name)
                     if mapping:
                         lang_const = f'${{{mapping.lang_constant}}}'
                     else:
                         lang_const = f'${{LANG_{lang_cfg.name.upper()}}}'
-                    # Look up translated description
-                    i18n = getattr(pkg, 'description_i18n', {}) or {}
-                    lang_desc = i18n.get(lang_cfg.name, pkg.description)
-                    lang_desc = lang_desc.replace('"', '$\\"')
+                    lang_desc = pkg.description.get_for_language(
+                        lang_cfg.name,
+                        f"packages.{pkg.name}.description",
+                    )
+                    lang_desc = ctx.resolve(lang_desc).replace('"', '$\\"')
                     lines.append(f'LangString {desc_var} {lang_const} "{lang_desc}"')
             else:
                 # No configured languages: emit an English LangString as a fallback
-                desc = pkg.description.replace('"', '$\\"')
+                desc = ctx.resolve(pkg.description.text).replace('"', '$\\"')
                 lines.append(f'LangString {desc_var} ${{LANG_ENGLISH}} "{desc}"')
     lines.extend([
         "",
@@ -172,7 +179,7 @@ def generate_package_descriptions(ctx: BuildContext) -> List[str]:
 
     # Bind each description to its section or group
     for pkg, sec_id, is_group in all_pkgs:
-        if pkg.description:
+        if not pkg.description.is_empty():
             if sec_id in desc_map:
                 desc_var = desc_map[sec_id]
                 lines.append(f'  !insertmacro MUI_DESCRIPTION_TEXT ${{{sec_id}}} $({desc_var})')
@@ -296,6 +303,13 @@ def generate_oninit(ctx: BuildContext) -> List[str]:
         '  Abort',
         '',
     ])
+
+    if len(cfg.languages) > 1:
+        lines.extend([
+            '  ; Language selection dialog before UI initialization',
+            '  !insertmacro MUI_LANGDLL_DISPLAY',
+            '',
+        ])
 
     # Signature verification
     if cfg.signing and cfg.signing.verify_signature:

@@ -48,11 +48,14 @@ class TestFileEntry:
         fe = FileEntry.from_dict("test.exe")
         assert fe.source == "test.exe"
         assert fe.destination == "$INSTDIR"
-        assert not fe.recursive
+        # 'recursive' field removed; recursion is determined from source pattern
+        assert not hasattr(fe, 'recursive')
 
     def test_from_dict(self):
-        fe = FileEntry.from_dict({"source": "lib/*", "destination": "$INSTDIR\\lib", "recursive": True})
-        assert fe.recursive
+        # Use '**' pattern to indicate recursion (no explicit recursive key)
+        fe = FileEntry.from_dict({"source": "lib/**/*", "destination": "$INSTDIR\\lib"})
+        from ypack.converters.nsis_sections import _should_use_recursive
+        assert _should_use_recursive(fe.source)
 
     def test_remote(self):
         fe = FileEntry.from_dict({"source": "https://x.com/f.bin", "checksum_type": "sha256", "checksum_value": "abc", "decompress": True})
@@ -126,6 +129,7 @@ class TestPackageConfig:
     def test_update(self):
         d = {**self.MINIMAL, "update": {"enabled": True, "update_url": "https://u", "download_url": "https://d"}}
         cfg = PackageConfig.from_dict(d)
+        assert cfg.update is not None
         assert cfg.update.download_url == "https://d"
     def test_languages_default(self):
         cfg = PackageConfig.from_dict(self.MINIMAL)
@@ -142,6 +146,7 @@ class TestPackageConfig:
     def test_logging(self):
         d = {**self.MINIMAL, "logging": {"enabled": True, "path": "C:\\logs", "level": "DEBUG"}}
         cfg = PackageConfig.from_dict(d)
+        assert cfg.logging is not None
         assert cfg.logging.level == "DEBUG"
 
     def test_packages_with_children(self):

@@ -47,8 +47,15 @@ def _reg(name: str, iso_code: str, desc: str = "") -> None:
     )
 
 
-# -- Western European -------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Language Registry — core languages used by built-in translations
+# Only languages that have entries in BUILTIN_TRANSLATIONS (and their
+# immediate companions used by the codebase) are retained here to keep
+# the registry compact and maintainable.
+# ---------------------------------------------------------------------------
 _reg("English",                "en",     "English (US)")
+_reg("SimplifiedChinese",      "zh-CN",  "Simplified Chinese")
+_reg("TraditionalChinese",     "zh-TW",  "Traditional Chinese")
 _reg("French",                 "fr",     "French (France)")
 _reg("German",                 "de",     "German (Germany)")
 _reg("Spanish",                "es",     "Spanish (Spain)")
@@ -57,48 +64,21 @@ _reg("Portuguese",             "pt",     "Portuguese (Portugal)")
 _reg("BrazilianPortuguese",    "pt-BR",  "Portuguese (Brazil)")
 _reg("Italian",                "it",     "Italian (Italy)")
 _reg("Dutch",                  "nl",     "Dutch (Netherlands)")
-_reg("Catalan",                "ca",     "Catalan")
-
-# -- Nordic ------------------------------------------------------------------
+_reg("Polish",                 "pl",     "Polish (Poland)")
+_reg("Czech",                  "cs",     "Czech (Czech Republic)")
+_reg("Hungarian",              "hu",     "Hungarian (Hungary)")
+_reg("Turkish",                "tr",     "Turkish (Turkey)")
+_reg("Japanese",               "ja",     "Japanese (Japan)")
+_reg("Korean",                 "ko",     "Korean (South Korea)")
+_reg("Russian",                "ru",     "Russian (Russia)")
 _reg("Swedish",                "sv",     "Swedish (Sweden)")
 _reg("Norwegian",              "nb",     "Norwegian (Bokmål)")
 _reg("NorwegianNynorsk",       "nn",     "Norwegian (Nynorsk)")
 _reg("Danish",                 "da",     "Danish (Denmark)")
-_reg("Finnish",                "fi",     "Finnish (Finland)")
-
-# -- Eastern European -------------------------------------------------------
-_reg("Polish",                 "pl",     "Polish (Poland)")
-_reg("Czech",                  "cs",     "Czech (Czech Republic)")
-_reg("Hungarian",              "hu",     "Hungarian (Hungary)")
-_reg("Romanian",               "ro",     "Romanian (Romania)")
-_reg("Bulgarian",              "bg",     "Bulgarian (Bulgaria)")
-_reg("Croatian",               "hr",     "Croatian (Croatia)")
-_reg("Slovak",                 "sk",     "Slovak (Slovakia)")
-_reg("Serbian",                "sr",     "Serbian (Cyrillic)")
-_reg("SerbianLatin",           "sr-Latn","Serbian (Latin)")
-_reg("Slovenian",              "sl",     "Slovenian (Slovenia)")
-_reg("Estonian",               "et",     "Estonian (Estonia)")
-_reg("Latvian",                "lv",     "Latvian (Latvia)")
-_reg("Lithuanian",             "lt",     "Lithuanian (Lithuania)")
 _reg("Ukrainian",              "uk",     "Ukrainian (Ukraine)")
-_reg("Russian",                "ru",     "Russian (Russia)")
-
-# -- Asian -------------------------------------------------------------------
-_reg("SimplifiedChinese",      "zh-CN",  "Simplified Chinese")
-_reg("TraditionalChinese",     "zh-TW",  "Traditional Chinese")
-_reg("Japanese",               "ja",     "Japanese (Japan)")
-_reg("Korean",                 "ko",     "Korean (South Korea)")
+_reg("Arabic",                 "ar",     "Arabic (Saudi Arabia)")
 _reg("Thai",                   "th",     "Thai (Thailand)")
 _reg("Vietnamese",             "vi",     "Vietnamese (Vietnam)")
-_reg("Indonesian",             "id",     "Indonesian (Indonesia)")
-
-# -- Middle Eastern / Other --------------------------------------------------
-_reg("Turkish",                "tr",     "Turkish (Turkey)")
-_reg("Arabic",                 "ar",     "Arabic (Saudi Arabia)")
-_reg("Hebrew",                 "he",     "Hebrew (Israel)")
-_reg("Farsi",                  "fa",     "Persian (Iran)")
-_reg("Greek",                  "el",     "Greek (Greece)")
-_reg("Macedonian",             "mk",     "Macedonian")
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +103,7 @@ def _build_alias_map() -> None:
         # Common aliases
         "chinese":              "SimplifiedChinese",
         "zh":                   "SimplifiedChinese",
+        "zh-cn":                "SimplifiedChinese",
         "en":                   "English",
         "fr":                   "French",
         "de":                   "German",
@@ -192,7 +173,7 @@ BUILTIN_STRING_IDS = (
     "langpage_title",
     "langpage_desc",
     "finish_run",
-)
+) 
 
 # {canonical_language_name: {string_id: translation}}
 BUILTIN_TRANSLATIONS: Dict[str, Dict[str, str]] = {

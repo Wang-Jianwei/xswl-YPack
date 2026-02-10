@@ -16,6 +16,12 @@ from typing import Any, Dict, List
 _STRING = {"type": "string"}
 _BOOL = {"type": "boolean"}
 _INT = {"type": "integer"}
+_LANG_TEXT = {
+    "oneOf": [
+        _STRING,
+        {"type": "object", "additionalProperties": _STRING},
+    ],
+}
 
 _REGISTRY_ENTRY = {
     "type": "object",
@@ -47,7 +53,7 @@ _FILE_ASSOCIATION = {
     "properties": {
         "extension": _STRING,
         "prog_id": _STRING,
-        "description": _STRING,
+        "description": _LANG_TEXT,
         "application": _STRING,
         "default_icon": _STRING,
         "verbs": {"type": "object", "additionalProperties": _STRING},
@@ -89,7 +95,7 @@ _FILE_ENTRY = {
                 "source": {"oneOf": [_STRING, {"type": "array", "items": _STRING}]},
                 "download_url": _STRING,
                 "destination": _STRING,
-                "recursive": _BOOL,
+
                 "checksum_type": _STRING,
                 "checksum_value": _STRING,
                 "decompress": _BOOL,
@@ -111,10 +117,10 @@ CONFIG_SCHEMA: Dict[str, Any] = {
                 "name": _STRING,
                 "version": _STRING,
                 "publisher": _STRING,
-                "description": _STRING,
+                "description": _LANG_TEXT,
                 "install_icon": _STRING,
                 "uninstall_icon": _STRING,
-                "license": _STRING,
+                "license": _LANG_TEXT,
             },
         },
         "install": {
@@ -131,7 +137,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
                 "file_associations": {"type": "array", "items": _FILE_ASSOCIATION},
                 "system_requirements": _SYSTEM_REQUIREMENTS,
                 "launch_on_finish": _STRING,
-                "launch_on_finish_label": _STRING,
+                "launch_on_finish_label": _LANG_TEXT,
                 "launch_in_background": _BOOL,
                 "silent_install": _BOOL,
                 "registry_key": _STRING,
