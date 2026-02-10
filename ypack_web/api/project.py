@@ -33,7 +33,34 @@ def config_to_dict(config: PackageConfig) -> Dict[str, Any]:
     Convert PackageConfig to a dictionary suitable for JSON serialization.
     """
     if config._raw_dict:
-        return config._raw_dict
+        # If the raw dict is present (config was constructed from user YAML),
+        # return a *copy* augmented with any UI-friendly flags (currently
+        # `recursive` for file entries detected from source patterns).
+        import copy
+        raw = copy.deepcopy(config._raw_dict)
+        files_raw = raw.get('files', [])
+        files_out = []
+        for item in files_raw:
+            # Normalise many accepted input shapes into a dict form
+            if isinstance(item, str):
+                src = item
+                dst = "$INSTDIR"
+                out_item = {"source": src, "destination": dst}
+            elif isinstance(item, dict):
+                src = item.get("source", "")
+                dst = item.get("destination", "$INSTDIR")
+                out_item = {k: v for k, v in item.items() if k != "source" and k != "destination"}
+                out_item["source"] = src
+                out_item["destination"] = dst
+            else:
+                src = str(item)
+                out_item = {"source": src, "destination": "$INSTDIR"}
+
+            if isinstance(src, str) and _should_use_recursive(src):
+                out_item["recursive"] = True
+            files_out.append(out_item)
+        raw['files'] = files_out
+        return raw
     
     result = {
         'app': {
