@@ -11,6 +11,8 @@ from ypack.config import (
     FileAssociation,
     FileEntry,
     InstallConfig,
+    LangText,
+    LanguageConfig,
     LoggingConfig,
     PackageConfig,
     PackageEntry,
@@ -53,17 +55,14 @@ class TestConverterBasics:
         assert '!include "FileFunc.nsh"' in script
 
     def test_license_define_in_header(self):
-        """LICENSE_FILE should be defined in the header (before MUI2 include)."""
+        """License page should use MUI_PAGE_LICENSE with LicenseLangString or direct path."""
         cfg = _simple_config(app={"name": "T", "version": "1.0", "publisher": "P", "license": "./LICENSE"})
         script = YamlToNsisConverter(cfg).convert()
-        assert '!define "LICENSE_FILE"' not in script  # sanity: no malformed define
-        assert '!define LICENSE_FILE' in script
-        assert 'LicenseData "${LICENSE_FILE}"' in script
-        # Ensure both the define and LicenseData are present before the MUI include (general settings)
-        assert script.index('!define LICENSE_FILE') < script.index('!include "MUI2.nsh"')
-        assert script.index('LicenseData "${LICENSE_FILE}"') < script.index('!include "MUI2.nsh"')
-        # Ensure license page insertion occurs after the MUI include
-        assert script.index('!include "MUI2.nsh"') < script.index('!insertmacro MUI_PAGE_LICENSE "${LICENSE_FILE}"')
+        assert '!define MUI_LICENSEPAGE_CHECKBOX' in script
+        assert 'MUI_PAGE_LICENSE' in script
+        # Should NOT use old custom page approach
+        assert 'Function License_Create' not in script
+        assert 'Page custom License_Create License_Leave' not in script
 
     def test_variable_resolution(self):
         cfg = _simple_config()
@@ -102,6 +101,33 @@ class TestInstallerSection:
         assert "$DESKTOP" in script
         assert "$SMPROGRAMS" in script
 
+    def test_shortcut_options_page_and_vars(self):
+        cfg = _simple_config()
+        from ypack.config import ShortcutConfig
+        cfg.install.desktop_shortcut = ShortcutConfig(name="", target="$INSTDIR\\TestApp.exe")
+        cfg.install.start_menu_shortcut = ShortcutConfig(name="", target="$INSTDIR\\TestApp.exe")
+        # Ensure language is explicitly configured for predictable output
+        cfg.languages = [LanguageConfig(name="English")]
+        script = YamlToNsisConverter(cfg).convert()
+        assert 'Var CREATE_DESKTOP_SHORTCUT' in script
+        assert 'Var CREATE_START_MENU_SHORTCUT' in script
+        assert 'Page custom ShortcutOptions_Create ShortcutOptions_Leave' in script
+        assert 'Function ShortcutOptions_Create' in script
+        assert 'StrCpy $CREATE_DESKTOP_SHORTCUT "1"' in script
+        assert 'LangString SHORTCUTS_DESKTOP ${LANG_ENGLISH} "Create desktop shortcut"' in script
+        assert 'LangString SHORTCUTS_STARTMENU ${LANG_ENGLISH} "Create start menu shortcut"' in script
+        assert '$(SHORTCUTS_DESKTOP)' in script
+        assert '$(SHORTCUTS_STARTMENU)' in script
+
+    def test_shortcut_options_page_with_chinese_language(self):
+        cfg = _simple_config(languages=["English", "SimplifiedChinese"])
+        from ypack.config import ShortcutConfig
+        cfg.install.desktop_shortcut = ShortcutConfig(name="", target="$INSTDIR\\TestApp.exe")
+        cfg.install.start_menu_shortcut = ShortcutConfig(name="", target="$INSTDIR\\TestApp.exe")
+        script = YamlToNsisConverter(cfg).convert()
+        assert 'LangString SHORTCUTS_DESKTOP ${LANG_SIMPCHINESE} "创建桌面快捷方式"' in script
+        assert 'LangString SHORTCUTS_STARTMENU ${LANG_SIMPCHINESE} "创建开始菜单快捷方式"' in script
+
     def test_remote_file(self):
         cfg = _simple_config()
         cfg.files = [FileEntry(source="https://x.com/f.bin", checksum_type="sha256", checksum_value="abc", decompress=True)]
@@ -114,7 +140,7 @@ class TestInstallerSection:
     def test_file_associations(self):
         cfg = _simple_config()
         cfg.install.file_associations = [
-            FileAssociation(extension=".foo", prog_id="Foo.File", description="Foo", application="$INSTDIR\\Foo.exe", default_icon="$INSTDIR\\icons\\foo.ico", verbs={"open": '$INSTDIR\\Foo.exe "%1"'}),
+            FileAssociation(extension=".foo", prog_id="Foo.File", description=LangText.from_value("Foo"), application="$INSTDIR\\Foo.exe", default_icon="$INSTDIR\\icons\\foo.ico", verbs={"open": '$INSTDIR\\Foo.exe "%1"'}),
         ]
         script = YamlToNsisConverter(cfg).convert()
         assert 'WriteRegStr HKCR ".foo"' in script
@@ -242,6 +268,8 @@ class TestPackageSections:
             "files": [],
             "packages": {"drv": {"sources": [{"source": "d/*", "destination": "$INSTDIR\\d"}], "optional": False, "description": "Driver package"}},
         })
+        # Ensure language is explicitly configured for predictable output
+        cfg.languages = [LanguageConfig(name="English")]
         script = YamlToNsisConverter(cfg).convert()
         # Description should be defined as LangString
         assert 'LangString DESC_0 ${LANG_ENGLISH} "Driver package"' in script
@@ -264,6 +292,8 @@ class TestPackageSections:
                 }
             },
         })
+        # Ensure language is explicitly configured for predictable output
+        cfg.languages = [LanguageConfig(name="English")]
         script = YamlToNsisConverter(cfg).convert()
         # SectionGroup should have an ID when it has a description
         assert 'SectionGroup /e "Drivers" SEC_GROUP_0' in script
@@ -298,10 +328,33 @@ class TestPackageSections:
 class TestLanguages:
     def test_multi_language(self):
         cfg = _simple_config()
-        cfg.languages = ["English", "SimplifiedChinese"]
+        cfg.languages = [LanguageConfig(name="English"), LanguageConfig(name="SimplifiedChinese")]
         script = YamlToNsisConverter(cfg).convert()
         assert 'MUI_LANGUAGE "English"' in script
-        assert 'MUI_LANGUAGE "SimplifiedChinese"' in script
+        # SimplifiedChinese is mapped to SimpChinese (actual NSIS language file name)
+        assert 'MUI_LANGUAGE "SimpChinese"' in script
+        # Language selection dialog is shown before UI initialization
+        assert '!insertmacro MUI_LANGDLL_DISPLAY' in script
+        # Also ensure alias mapping works for Chinese
+        cfg.languages = [LanguageConfig.from_dict("Chinese")]
+        script2 = YamlToNsisConverter(cfg).convert()
+        # Chinese is mapped to SimpChinese (actual NSIS language file name)
+        assert 'MUI_LANGUAGE "SimpChinese"' in script2
+
+    def test_default_no_language_uses_system(self):
+        cfg = _simple_config()
+        # Do not set cfg.languages — default should be empty (use system language)
+        script = YamlToNsisConverter(cfg).convert()
+        # Even without configured languages, MUI_LANGUAGE "English" must be
+        # emitted so that MUI2 internal LangStrings are defined (avoids
+        # makensis warning 6040 treated as error).
+        assert '!insertmacro MUI_LANGUAGE "English"' in script
+        assert '!insertmacro MUI_PAGE_LANGUAGE' not in script
+        # If shortcut page is present, it should use literal text (no LangString refs)
+        from ypack.config import ShortcutConfig
+        cfg.install.desktop_shortcut = ShortcutConfig(name="", target="$INSTDIR\\TestApp.exe")
+        script2 = YamlToNsisConverter(cfg).convert()
+        assert '${NSD_CreateCheckBox} 10u 10u 100% 12u "Create desktop shortcut"' in script2
 
 
 class TestLogging:
@@ -341,17 +394,43 @@ class TestFinishRun:
     def test_finish_run(self):
         cfg = _simple_config()
         cfg.install.launch_on_finish = "$INSTDIR\\MyApp.exe"
-        cfg.install.launch_on_finish_label = "Run MyApp"
+        cfg.install.launch_on_finish_label = LangText.from_value("Run MyApp")
         script = YamlToNsisConverter(cfg).convert()
-        assert 'MUI_FINISHPAGE_RUN "$INSTDIR\\MyApp.exe"' in script
-        assert 'MUI_FINISHPAGE_RUN_TEXT "Run MyApp"' in script
+        assert 'Function Finish_Create' in script
+        assert 'Function Finish_Leave' in script
+        assert 'Page custom Finish_Create Finish_Leave' in script
+        # Finish page uses hardcoded text (not LangString) to avoid compile-time references
+        assert '${NSD_CreateCheckBox} 10u 10u 100% 12u "Run MyApp"' in script
 
     def test_finish_run_label_resolution(self):
         cfg = _simple_config()
         cfg.install.launch_on_finish = "$INSTDIR\\MyApp.exe"
-        cfg.install.launch_on_finish_label = "Run ${app.name}"
+        cfg.install.launch_on_finish_label = LangText.from_value("Run ${app.name}")
         script = YamlToNsisConverter(cfg).convert()
-        assert 'MUI_FINISHPAGE_RUN_TEXT "Run TestApp"' in script
+        # Finish page uses hardcoded text with resolved app name
+        assert '${NSD_CreateCheckBox} 10u 10u 100% 12u "Run TestApp"' in script
+
+    def test_finish_run_label_i18n(self):
+        cfg = _simple_config()
+        cfg.languages = [LanguageConfig(name="English"), LanguageConfig(name="French")]
+        cfg.install.launch_on_finish = "$INSTDIR\\MyApp.exe"
+        cfg.install.launch_on_finish_label = LangText.from_value({
+            "en": "Run ${app.name}",
+            "fr": "Lancer ${app.name}",
+        })
+        script = YamlToNsisConverter(cfg).convert()
+        assert 'LangString FINISHPAGE_RUN_TEXT ${LANG_ENGLISH} "Run TestApp"' in script
+        assert 'LangString FINISHPAGE_RUN_TEXT ${LANG_FRENCH} "Lancer TestApp"' in script
+
+    def test_finish_run_label_i18n_missing_language_raises(self):
+        cfg = _simple_config()
+        cfg.languages = [LanguageConfig(name="English"), LanguageConfig(name="French")]
+        cfg.install.launch_on_finish = "$INSTDIR\\MyApp.exe"
+        cfg.install.launch_on_finish_label = LangText.from_value({
+            "en": "Run ${app.name}",
+        })
+        with pytest.raises(ValueError, match="launch_on_finish_label"):
+            YamlToNsisConverter(cfg).convert()
 
 
 class TestOnInit:
@@ -404,6 +483,7 @@ class TestOnInit:
 
     def test_existing_install_default_is_prompt(self):
         cfg = _simple_config()
+        assert cfg.install.existing_install is not None
         assert cfg.install.existing_install.mode == "prompt_uninstall"
         script = YamlToNsisConverter(cfg).convert()
         assert 'IDYES _ei_do_uninstall IDNO _ei_cancel' in script
@@ -416,6 +496,7 @@ class TestOnInit:
             "install": {"existing_install": "auto_uninstall"},
             "files": [{"source": "t.exe"}],
         })
+        assert cfg.install.existing_install is not None
         assert cfg.install.existing_install.mode == "auto_uninstall"
 
     # --- Version check ---
@@ -454,6 +535,7 @@ class TestOnInit:
             "install": {"allow_multiple_installations": True},
             "files": [{"source": "t.exe"}],
         })
+        assert cfg.install.existing_install is not None
         assert cfg.install.existing_install.allow_multiple is True
 
     # --- Show version info in prompt ---

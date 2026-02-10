@@ -30,11 +30,18 @@ dependencies = [
 
 [project.optional-dependencies]
 validation = ["jsonschema>=4.0"]
+web = [
+    "flask>=3.0",
+    "flask-cors>=4.0",
+    "jsonschema>=4.0",
+]
 dev = [
     "pytest>=7.0",
     "ruff>=0.4",
     "mypy>=1.0",
     "jsonschema>=4.0",
+    "flask>=3.0",
+    "flask-cors>=4.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -42,6 +49,7 @@ include = ["ypack*"]
 
 [project.scripts]
 xswl-ypack = "ypack.cli:main"
+xswl-ypack-web = "ypack_web.server:main"
 
 [project.urls]
 Repository = "https://github.com/Wang-Jianwei/xswl-YPack"

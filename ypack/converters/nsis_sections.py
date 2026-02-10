@@ -15,6 +15,7 @@ import re
 from typing import List, Set, Optional
 
 from .context import BuildContext
+from ..config import LangText
 
 
 # -----------------------------------------------------------------------
@@ -101,7 +102,7 @@ def generate_installer_section(ctx: BuildContext) -> List[str]:
                 lines.append(f'  SetOutPath "{dest}"')
                 current_outpath = dest
             norm = _normalize_path(fe.source)
-            if _should_use_recursive(fe.source) or fe.recursive:
+            if _should_use_recursive(fe.source):
                 lines.append(f'  File /r "{norm}"')
             else:
                 lines.append(f'  File "{norm}"')
@@ -153,6 +154,9 @@ def generate_installer_section(ctx: BuildContext) -> List[str]:
     _emit_env_var_writes(ctx, lines)
 
     # --- Shortcuts ---
+    # Default to creating shortcuts; the installer custom page may override these vars
+    lines.append('  StrCpy $CREATE_DESKTOP_SHORTCUT "1"')
+    lines.append('  StrCpy $CREATE_START_MENU_SHORTCUT "1"')
     _emit_shortcuts(ctx, lines)
     if has_logging and (cfg.install.desktop_shortcut or cfg.install.start_menu_shortcut):
         lines.append('  !insertmacro LogWrite "Shortcuts created."')
@@ -207,7 +211,7 @@ def generate_uninstaller_section(ctx: BuildContext) -> List[str]:
         if fe.is_remote:
             filename = fe.source.rsplit("/", 1)[-1] or "download"
             lines.append(f'  Delete "{dest}\\{filename}"')
-        elif _should_use_recursive(fe.source) or fe.recursive:
+        elif _should_use_recursive(fe.source):
             dirname = os.path.basename(_normalize_path(fe.source).rstrip("\\*"))
             if dirname and dirname != "*":
                 lines.append(f'  RMDir /r "{dest}\\{dirname}"')
@@ -424,7 +428,11 @@ def _emit_shortcuts(ctx: BuildContext, lines: List[str]) -> None:
         # Use custom name if provided, otherwise use ${APP_NAME}
         name = ctx.resolve(desktop_sc.name) if desktop_sc.name else "${APP_NAME}"
         lines.append("  ; Desktop shortcut")
+        lines.append('  StrCmp $CREATE_DESKTOP_SHORTCUT "1" Shortcuts_CreateDesktop')
+        lines.append('  Goto Shortcuts_SkipDesktop')
+        lines.append('Shortcuts_CreateDesktop:')
         lines.append(f'  CreateShortCut "$DESKTOP\\{name}.lnk" "{target}"')
+        lines.append('Shortcuts_SkipDesktop:')
         lines.append("")
 
     start_sc = cfg.install.start_menu_shortcut
@@ -436,21 +444,42 @@ def _emit_shortcuts(ctx: BuildContext, lines: List[str]) -> None:
         name = ctx.resolve(start_sc.name) if start_sc.name else "${APP_NAME}"
         lines.extend([
             "  ; Start menu shortcuts",
+            '  StrCmp $CREATE_START_MENU_SHORTCUT "1" Shortcuts_CreateStartMenu',
+            '  Goto Shortcuts_SkipStartMenu',
+            'Shortcuts_CreateStartMenu:',
             '  CreateDirectory "$SMPROGRAMS\\${APP_NAME}"',
             f'  CreateShortCut "$SMPROGRAMS\\${{APP_NAME}}\\{name}.lnk" "{target}"',
             '  CreateShortCut "$SMPROGRAMS\\${APP_NAME}\\Uninstall.lnk" "$INSTDIR\\Uninstall.exe"',
+            'Shortcuts_SkipStartMenu:',
             "",
         ])
 
 
 def _emit_file_associations(ctx: BuildContext, lines: List[str]) -> None:
     """Emit WriteRegStr for file associations."""
-    for fa in ctx.config.install.file_associations:
+    fa_list = ctx.config.install.file_associations
+    if not fa_list:
+        return
+
+    if not ctx.config.languages:
+        for fa in fa_list:
+            desc_text = LangText.from_value(fa.description)
+            if desc_text.translations:
+                raise ValueError(
+                    "file_associations.description requires languages when using per-language values."
+                )
+
+    for idx, fa in enumerate(fa_list):
         hive, prefix = _fa_hive_prefix(fa)
         lines.append(f"  ; File association: {fa.extension} -> {fa.application}")
         lines.append(f'  WriteRegStr {hive} "{prefix}{fa.extension}" "" "{fa.prog_id}"')
         if fa.prog_id:
-            lines.append(f'  WriteRegStr {hive} "{prefix}{fa.prog_id}" "" "{fa.description}"')
+            desc_text = LangText.from_value(fa.description)
+            if desc_text.translations:
+                desc_value = f'$(FA_DESC_{idx})'
+            else:
+                desc_value = ctx.resolve(desc_text.text).replace('"', '$\\"')
+            lines.append(f'  WriteRegStr {hive} "{prefix}{fa.prog_id}" "" "{desc_value}"')
         if fa.default_icon:
             lines.append(f'  WriteRegStr {hive} "{prefix}{fa.prog_id}\\DefaultIcon" "" "{fa.default_icon}"')
         verbs = fa.verbs or {}

@@ -94,7 +94,76 @@ class YamlToNsisConverter(BaseConverter):
         if has_remote or has_checksum:
             parts.extend(generate_checksum_helper())
 
-        return "\n".join(parts)
+        # Final cleanup: remove any legacy MUI_FINISHPAGE_RUN defines that could
+        # cause makensis 6010 warnings in some environments. We implement
+        # launch-on-finish with our own custom finish page above.
+        filtered_parts: List[str] = []
+        for line in parts:
+            if line.strip().startswith('!define MUI_FINISHPAGE_RUN'):
+                continue
+            if line.strip().startswith('!define MUI_FINISHPAGE_RUN_TEXT'):
+                continue
+            filtered_parts.append(line)
+
+        # Post-process: Reorder MUI_LANGUAGE and LangString definitions to appear
+        # after all MUI_PAGE_* and MUI_UNPAGE_* macros (NSIS MUI requirement).
+        script_lines = "\n".join(filtered_parts).split("\n")
+        reordered_lines = self._reorder_mui_language(script_lines)
+
+        return "\n".join(reordered_lines)
+    
+    def _reorder_mui_language(self, lines: List[str]) -> List[str]:
+        """Reorder script lines so MUI_LANGUAGE and LangString come after UI pages.
+        
+        NSIS MUI requires:
+        1. ``!insertmacro MUI_LANGUAGE`` comes AFTER all ``MUI_PAGE_*`` macros.
+        2. ``LangString`` definitions come AFTER ``MUI_LANGUAGE`` (so that the
+           ``LANG_*`` constants are already defined).
+
+        The reordered section after the last page directive becomes::
+
+            ; ... pages ...
+            !insertmacro MUI_LANGUAGE "English"
+            !insertmacro MUI_LANGUAGE "SimpChinese"
+            LangString SHORTCUTS_PAGE_TITLE ${LANG_ENGLISH} "..."
+            LangString SHORTCUTS_PAGE_TITLE ${LANG_SIMPCHINESE} "..."
+            ; ... rest of script ...
+        """
+        language_directives = []  # MUI_LANGUAGE macros
+        langstring_defs = []       # LangString definitions
+        other_lines = []
+        found_last_page = -1
+        
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            
+            # Track the last MUI_PAGE or MUI_UNPAGE macro or custom page
+            if stripped.startswith('!insertmacro MUI_PAGE') or \
+               stripped.startswith('!insertmacro MUI_UNPAGE') or \
+               stripped.startswith('Page custom'):
+                found_last_page = len(other_lines)
+            
+            # Collect language directives to move
+            if stripped.startswith('!insertmacro MUI_LANGUAGE'):
+                language_directives.append(line)
+            elif stripped.startswith('LangString '):
+                langstring_defs.append(line)
+            else:
+                other_lines.append(line)
+        
+        # If we have language directives, reorder them
+        if found_last_page >= 0 and language_directives:
+            # Insert pattern: ...pages... + MUI_LANGUAGE + LangStrings + ...rest...
+            # MUI_LANGUAGE must come before LangString so LANG_* constants exist.
+            result = other_lines[:found_last_page + 1] + \
+                     language_directives + \
+                     langstring_defs + \
+                     other_lines[found_last_page + 1:]
+            return result
+        
+        # Otherwise return as-is (either no pages or no language directives)
+        return lines
+
 
     def save(self, output_path: str) -> None:  # noqa: D102
         import os

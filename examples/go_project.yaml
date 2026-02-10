@@ -25,4 +25,4 @@ files:
   # Static assets
   - source: static/*
     destination: $INSTDIR\\static
-    recursive: true
+

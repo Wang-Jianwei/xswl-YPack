@@ -148,7 +148,8 @@ class TestSimpleIntegration:
         assert '!define APP_NAME "IntegApp"' in nsi
         assert '!define APP_VERSION "2.3.4"' in nsi
         assert 'MUI_LANGUAGE "English"' in nsi
-        assert 'MUI_LANGUAGE "SimplifiedChinese"' in nsi
+        # SimplifiedChinese is mapped to SimpChinese (actual NSIS language file name)
+        assert 'MUI_LANGUAGE "SimpChinese"' in nsi
         assert 'File "IntegApp.exe"' in nsi
         assert 'SetOutPath "$INSTDIR\\data"' in nsi
         assert "CreateShortCut" in nsi
@@ -199,8 +200,14 @@ class TestFullIntegration:
         assert "UserInfo::GetAccountType" in nsi
 
         # Finish page
-        assert "MUI_FINISHPAGE_RUN" in nsi
-        assert "Launch FullApp" in nsi
+        # Launch-on-finish implemented via custom finish page functions
+        assert 'Function Finish_Create' in nsi
+        assert 'Function Finish_Leave' in nsi
+        assert 'Page custom Finish_Create Finish_Leave' in nsi
+        assert 'Function Finish_Leave' in nsi
+        # When languages are configured, finish page uses localized LangString
+        assert '$(FINISHPAGE_RUN_TEXT)' in nsi
+        assert 'LangString FINISHPAGE_RUN_TEXT ${LANG_ENGLISH} "Launch FullApp"' in nsi
 
         # Packages
         assert 'Section "App"' in nsi
