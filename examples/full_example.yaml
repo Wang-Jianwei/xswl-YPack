@@ -158,15 +158,34 @@ logging:
   level: "DEBUG"                                   # 日志级别：DEBUG, INFO, WARNING, ERROR
 
 languages:                                         # 支持的语言列表（ypack 跨工具语言标识；由转换器映射到具体工具）
-  # 常见 ypack 语言标识（大小写敏感）：
-  # 西方语言：English, French, German, Spanish, Portuguese, BrazilianPortuguese, Russian, Polish, Czech, Hungarian, Turkish
-  # 亚洲语言：SimplifiedChinese, TraditionalChinese, Japanese, Korean
-  # 注意：这些是 ypack 定义的语言标识，与 NSIS MUI 恰好相同，但语义上独立。
-  # 转换器（如 convert_nsis.py）会将这些标识转换为目标工具所需的格式（例如生成 NSIS 脚本时调用 `!insertmacro MUI_LANGUAGE "<lang>"`）。
-  - English               # 默认语言示例
-  - SimplifiedChinese     # 简体中文示例
-  - French                # 法语示例
-  # 可根据需要添加更多语言；若目标转换器不支持某语言，会被忽略或警告
+  # ── 支持两种格式 ──
+  # 简单格式：直接写语言名字符串
+  # 完整格式：对象，可附带自定义翻译覆盖（strings 字段）
+  #
+  # 常见 ypack 语言标识：
+  # 西方语言：English, French, German, Spanish, Italian, Dutch, Portuguese, BrazilianPortuguese,
+  #          Russian, Polish, Czech, Hungarian, Turkish, Swedish, Norwegian, Danish, Finnish
+  # 亚洲语言：SimplifiedChinese, TraditionalChinese, Japanese, Korean, Thai, Vietnamese
+  # 其他：    Arabic, Hebrew, Ukrainian, Greek
+  #
+  # 也支持别名（大小写不敏感）：chinese → SimplifiedChinese, zh → SimplifiedChinese,
+  #   en → English, ja → Japanese, ko → Korean, fr → French, de → German ...
+  #
+  # 组件描述的多语言：在 packages 的 description 中可以直接使用 dict 格式或 description_i18n 字段
+  #   description:
+  #     English: "Main files"
+  #     SimplifiedChinese: "主要文件"
+  #   或:
+  #   description: "Main files"
+  #   description_i18n:
+  #     SimplifiedChinese: "主要文件"
+  - English                     # 简单格式：使用内置翻译
+  - name: SimplifiedChinese     # 完整格式：可附带自定义字符串
+    strings:
+      finish_run: "启动 ${APP_NAME}"       # 覆盖完成页"运行"按钮文本
+  - name: French                # 完整格式：自定义字符串示例
+    strings:
+      shortcuts_page_title: "Options de raccourcis personnalisées"
 
 variables:              # 自定义变量（可在此处定义供 YAML 解析引用，注意不能和内置变量冲突）
   SIGN_PASS: "******"   # 签名证书密码的占位示例；建议在 CI/环境中注入此值，不要直接写入仓库

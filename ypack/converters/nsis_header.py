@@ -5,9 +5,14 @@ NSIS script header generation — defines, includes, unicode, icons.
 from __future__ import annotations
 
 import os
-from typing import List
+from typing import List, Optional
 
 from .context import BuildContext
+from .nsis_languages import NsisLanguageMapping, get_nsis_mapping_or_fallback
+from ..config import LanguageConfig
+from ..languages import (
+    get_translated_string,
+)
 
 
 def generate_header(ctx: BuildContext) -> List[str]:
@@ -118,29 +123,139 @@ def generate_general_settings(ctx: BuildContext) -> List[str]:
     return lines
 
 
+def _resolve_nsis_mapping(lang_cfg: LanguageConfig) -> NsisLanguageMapping:
+    """Resolve a LanguageConfig to NSIS-specific identifiers, with fallback."""
+    return get_nsis_mapping_or_fallback(lang_cfg.name)
+
+
 def generate_modern_ui(ctx: BuildContext) -> List[str]:
     """MUI2 include, page macros, language macros, finish-page run."""
     cfg = ctx.config
+    # Finish page run — implement with a custom finish page checkbox instead
+    # of relying on MUI_FINISHPAGE_RUN (avoids makensis 6010 warnings in some
+    # MUI/NSIS versions which treat unreferenced GUIInit as an error).
+    launch = cfg.install.launch_on_finish
     lines: List[str] = [
         "; --- Modern UI ---",
+    ]
+    lines.extend([
         '!include "MUI2.nsh"',
         "",
-    ]
+    ])
 
-    # Finish page run checkbox — MUST be defined BEFORE MUI_PAGE_FINISH macro
-    launch = cfg.install.launch_on_finish
+    # Emit fallback LANG_* constants for every configured language so
+    # that LangString definitions can be placed before MUI_LANGUAGE
+    # macros without causing undefined-constant errors.  The MUI_LANGUAGE
+    # macro will define them again (harmlessly) when it is processed.
+    langs: List[LanguageConfig] = cfg.languages or []
+    if langs:
+        lines.append('; --- Language constant fallbacks ---')
+        for lang_cfg in langs:
+            mapping = _resolve_nsis_mapping(lang_cfg)
+            if mapping.lcid > 0:
+                lines.extend([
+                    f'!ifndef {mapping.lang_constant}',
+                    f'  !define {mapping.lang_constant} {mapping.lcid}',
+                    f'!endif',
+                ])
+        lines.append('')
+    else:
+        # Always define LANG_ENGLISH as safety net for description
+        # LangString when no languages are configured.
+        lines.extend([
+            '!ifndef LANG_ENGLISH',
+            '  !define LANG_ENGLISH 1033',
+            '!endif',
+            '',
+        ])
+    # If a launch-on-finish path is configured, add a localized finish-page
+    # checkbox implemented with nsDialogs (more robust across MUI versions).
     if launch:
         path = ctx.resolve(launch)
-        lines.append("; Finish page run (launch on finish)")
-        lines.append(f'!define MUI_FINISHPAGE_RUN "{path}"')
-        label = cfg.install.launch_on_finish_label
-        if label:
-            label_resolved = ctx.resolve(label)
-            lines.append(f'!define MUI_FINISHPAGE_RUN_TEXT "{label_resolved}"')
-        lines.append("")
+        label_override = ""
+        if cfg.install.launch_on_finish_label:
+            label_override = ctx.resolve(cfg.install.launch_on_finish_label)
+            label_override = label_override.replace('"', '$\\"')
+
+        # When languages are configured we use a LangString reference
+        # (runtime-resolved) for the checkbox label; otherwise hardcode English.
+        if langs:
+            finish_label = '$(FINISHPAGE_RUN_TEXT)'
+        elif label_override:
+            finish_label = f'"{label_override}"'
+        else:
+            finish_label = '"Run ${APP_NAME}"'
+        lines.extend([
+            'Var RUN_ON_FINISH',
+            'Var _FINISH_RUN_CTRL',
+            '',
+            # Show/leave callbacks for the Finish page
+            'Function Finish_Create',
+            '  nsDialogs::Create 1018',
+            '  Pop $0',
+            '  StrCmp $0 error 0 +2',
+            '    Abort',
+            f'  ${{NSD_CreateCheckBox}} 10u 10u 100% 12u {finish_label}',
+            '  Pop $_FINISH_RUN_CTRL',
+            '  ${NSD_SetState} $_FINISH_RUN_CTRL 1',
+            '  nsDialogs::Show',
+            'FunctionEnd',
+            '',
+            'Function Finish_Leave',
+            '  ${NSD_GetState} $_FINISH_RUN_CTRL $0',
+            '  StrCmp $0 1 0 +2',
+            '    StrCpy $RUN_ON_FINISH 1',
+            '    Goto +2',
+            '  StrCpy $RUN_ON_FINISH 0',
+            '  ; If selected, run the configured program',
+            f'  StrCmp $RUN_ON_FINISH "1" 0 +2',
+            f'    ExecShell open "{path}"',
+            'FunctionEnd',
+            '',
+        ])
 
     # UI Pages
     lines.append("; UI Pages")
+
+    # Languages configured in YAML — determine behavior (default: no languages).
+    langs = cfg.languages or []
+
+    # Language selection behavior:
+    # - No configured languages: emit MUI_LANGUAGE "English" as default
+    #   (MUI2 requires at least one MUI_LANGUAGE to define its internal LangStrings).
+    # - One language: emit a single MUI_LANGUAGE for that language.
+    # - Multiple languages: emit a short introduction page (localized) followed
+    #   by MUI_PAGE_LANGUAGE so the user can choose at install time.
+    if langs:
+        # Emit custom introduction page when user can choose language
+        if len(langs) > 1:
+            lines.extend([
+                '; Language selection intro page',
+                '!include "nsDialogs.nsh"',
+                'Function LangSelect_Create',
+                '  nsDialogs::Create 1018',
+                '  Pop $0',
+                '  StrCmp $0 error 0 +2',
+                '    Abort',
+                '  ${NSD_CreateText} 10u 4u 100% 8u $(LANGPAGE_DESC)',
+                '  Pop $R9',
+                '  nsDialogs::Show',
+                'FunctionEnd',
+                'Function LangSelect_Leave',
+                '  ; no-op leave callback',
+                'FunctionEnd',
+                'Page custom LangSelect_Create LangSelect_Leave',
+                '; Language selection via custom page above, MUI_PAGE_LANGUAGE not used',
+            ])
+        # Emit mapped MUI_LANGUAGE entries
+        for lang_cfg in langs:
+            mapping = _resolve_nsis_mapping(lang_cfg)
+            lines.append(f'!insertmacro MUI_LANGUAGE "{mapping.mui_name}"')
+    else:
+        # No languages configured — default to English so MUI2 internal
+        # LangStrings (e.g. MUI_INNERTEXT_LICENSE_BOTTOM) are defined.
+        lines.append('!insertmacro MUI_LANGUAGE "English"')
+
     if cfg.app.license:
         lines.append('!insertmacro MUI_PAGE_LICENSE "${LICENSE_FILE}"')
     else:
@@ -164,19 +279,103 @@ def generate_modern_ui(ctx: BuildContext) -> List[str]:
     else:
         lines.append("!insertmacro MUI_PAGE_DIRECTORY")
 
+    # Shortcut options page (if desktop or start-menu shortcuts are configured)
+    if cfg.install.desktop_shortcut or cfg.install.start_menu_shortcut:
+        lines.append('; Shortcut options page')
+        lines.append('!include "nsDialogs.nsh"')
+        lines.append('!include "WinMessages.nsh"')
+        lines.append('Var CREATE_DESKTOP_SHORTCUT')
+        lines.append('Var CREATE_START_MENU_SHORTCUT')
+        lines.append('Var _SHORTCUTS_DESKTOP_CTRL')
+        lines.append('Var _SHORTCUTS_START_CTRL')
+        lines.append('')
+
+        # Create function: use localized strings when languages configured,
+        # otherwise fall back to literal English text (system language case).
+        if langs:
+            desktop_ref = '$(SHORTCUTS_DESKTOP)'
+            start_ref = '$(SHORTCUTS_STARTMENU)'
+        else:
+            desktop_ref = '"Create desktop shortcut"'
+            start_ref = '"Create start menu shortcut"'
+
+        lines.extend([
+            'Function ShortcutOptions_Create',
+            '  nsDialogs::Create 1018',
+            '  Pop $0',
+            '  StrCmp $0 error 0 +2',
+            '    Abort',
+            f'  ${'{'}NSD_CreateCheckBox{'}'} 10u 10u 100% 12u {desktop_ref}',
+            '  Pop $_SHORTCUTS_DESKTOP_CTRL',
+            '  ${NSD_SetState} $_SHORTCUTS_DESKTOP_CTRL 1',
+            f'  ${'{'}NSD_CreateCheckBox{'}'} 10u 28u 100% 12u {start_ref}',
+            '  Pop $_SHORTCUTS_START_CTRL',
+            '  ${NSD_SetState} $_SHORTCUTS_START_CTRL 1',
+            '  nsDialogs::Show',
+            'FunctionEnd',
+            '',
+            'Function ShortcutOptions_Leave',
+            '  ${NSD_GetState} $_SHORTCUTS_DESKTOP_CTRL $0',
+            '  StrCmp $0 1 0 +2',
+            '    StrCpy $CREATE_DESKTOP_SHORTCUT 1',
+            '  StrCpy $CREATE_DESKTOP_SHORTCUT 0',
+            '  ${NSD_GetState} $_SHORTCUTS_START_CTRL $0',
+            '  StrCmp $0 1 0 +2',
+            '    StrCpy $CREATE_START_MENU_SHORTCUT 1',
+            '  StrCpy $CREATE_START_MENU_SHORTCUT 0',
+            'FunctionEnd',
+            '',
+            'Page custom ShortcutOptions_Create ShortcutOptions_Leave',
+            '',
+        ])
+
     lines.extend([
         "!insertmacro MUI_PAGE_INSTFILES",
-        "!insertmacro MUI_PAGE_FINISH",
+        "Page custom Finish_Create Finish_Leave",
         "",
         "!insertmacro MUI_UNPAGE_CONFIRM",
         "!insertmacro MUI_UNPAGE_INSTFILES",
         "",
     ])
 
-    # Languages
-    langs = cfg.languages or ["English"]
-    for lang in langs:
-        lines.append(f'!insertmacro MUI_LANGUAGE "{lang}"')
-    lines.append("")
+    # Localized strings for shortcut options page — emit after MUI_LANGUAGE so
+    # ${LANG_*} constants are defined by MUI2.nsh and the language macros.
+    # Only emit if languages are configured (otherwise suppress LangString usage).
+    if cfg.install.desktop_shortcut or cfg.install.start_menu_shortcut:
+        if langs:  # Only if languages are configured
+            lines.append('; Shortcut options localized strings')
+            for lang_cfg in langs:
+                mapping = _resolve_nsis_mapping(lang_cfg)
+                lc = f'${{{mapping.lang_constant}}}'
+                desk = get_translated_string(lang_cfg.name, 'shortcuts_desktop', lang_cfg.strings)
+                smenu = get_translated_string(lang_cfg.name, 'shortcuts_startmenu', lang_cfg.strings)
+                lines.append(f'LangString SHORTCUTS_DESKTOP {lc} "{desk}"')
+                lines.append(f'LangString SHORTCUTS_STARTMENU {lc} "{smenu}"')
+            lines.append('')
+
+    # Localized strings for language selection intro page (only shown when multiple languages configured)
+    if langs and len(langs) > 1:
+        lines.append('; Language page localized strings')
+        for lang_cfg in langs:
+            mapping = _resolve_nsis_mapping(lang_cfg)
+            lc = f'${{{mapping.lang_constant}}}'
+            title = get_translated_string(lang_cfg.name, 'langpage_title', lang_cfg.strings)
+            desc = get_translated_string(lang_cfg.name, 'langpage_desc', lang_cfg.strings)
+            lines.append(f'LangString LANGPAGE_TITLE {lc} "{title}"')
+            lines.append(f'LangString LANGPAGE_DESC {lc} "{desc}"')
+        lines.append('')
+
+    # Localized strings for finish-page run checkbox (if configured)
+    if launch and langs:
+        lines.append('; Finish page localized strings')
+        for lang_cfg in langs:
+            mapping = _resolve_nsis_mapping(lang_cfg)
+            lc = f'${{{mapping.lang_constant}}}'
+            if cfg.install.launch_on_finish_label:
+                text = label_override
+            else:
+                text = get_translated_string(lang_cfg.name, 'finish_run', lang_cfg.strings)
+            lines.append(f'LangString FINISHPAGE_RUN_TEXT {lc} "{text}"')
+        lines.append('')
 
     return lines

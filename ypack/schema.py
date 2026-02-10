@@ -194,7 +194,25 @@ CONFIG_SCHEMA: Dict[str, Any] = {
                 "level": {"type": "string", "enum": ["DEBUG", "INFO", "WARNING", "ERROR"]},
             },
         },
-        "languages": {"type": "array", "items": _STRING},
+        "languages": {
+            "type": "array",
+            "items": {
+                "oneOf": [
+                    _STRING,
+                    {
+                        "type": "object",
+                        "properties": {
+                            "name": _STRING,
+                            "strings": {
+                                "type": "object",
+                                "additionalProperties": _STRING,
+                            },
+                        },
+                        "required": ["name"],
+                    },
+                ],
+            },
+        },
         "variables": {"type": "object"},
         "custom_includes": {"type": "object"},
     },

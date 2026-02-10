@@ -43,7 +43,28 @@ pip install -e ".[dev,validation]"
 
 ## 快速开始 / Quick Start
 
-### 1. 生成配置模板 / Generate a starter config
+### 方式一：使用 Web UI（推荐新手）
+
+🎨 **可视化编辑器**：通过拖拽和表单编辑生成 YAML 配置
+
+```bash
+# 安装 Web UI 依赖
+pip install -e ".[web]"
+
+# 启动服务器
+xswl-ypack-web
+
+# 或使用启动脚本
+.\scripts\start-web-ui.ps1
+```
+
+浏览器访问 http://127.0.0.1:5000 即可使用可视化编辑器。
+
+详见 [Web UI 快速入门](docs/WEB_UI_QUICKSTART.md)
+
+### 方式二：使用命令行（推荐熟手）
+
+#### 1. 生成配置模板 / Generate a starter config
 
 ```bash
 xswl-ypack init
@@ -51,7 +72,7 @@ xswl-ypack init
 
 这会在当前目录创建 `installer.yaml` 模板。
 
-### 2. 编辑 YAML 配置 / Edit the YAML
+#### 2. 编辑 YAML 配置 / Edit the YAML
 
 ```yaml
 app:
@@ -75,7 +96,7 @@ files:
     destination: "$INSTDIR\\resources"
 ```
 
-### 3. 生成安装脚本 / Convert
+#### 3. 生成安装脚本 / Convert
 
 ```bash
 # 生成 installer.nsi（默认 NSIS 格式）
@@ -93,7 +114,7 @@ xswl-ypack convert installer.yaml --dry-run
 > 注意：生成的安装脚本在写入磁盘时会以 **UTF-8 with BOM**（`utf-8-sig`）编码保存，以确保 NSIS 在处理包含 Unicode 字符的脚本时能够正确识别。
 ```
 
-### 4. 构建安装包 / Build
+#### 4. 构建安装包 / Build
 
 ```bash
 xswl-ypack convert installer.yaml --build
@@ -101,7 +122,7 @@ xswl-ypack convert installer.yaml --build
 
 需要系统安装对应编译器（如 [NSIS](https://nsis.sourceforge.io/) 的 `makensis`，需在 PATH 中或通过 `--makensis` 指定路径）。
 
-### 5. 校验配置 / Validate only
+#### 5. 校验配置 / Validate only
 
 ```bash
 xswl-ypack validate installer.yaml -v

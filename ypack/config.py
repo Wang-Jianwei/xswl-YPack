@@ -14,7 +14,7 @@ except ImportError as e:
         "PyYAML is required. Install with: pip install PyYAML"
     ) from e
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass, field
 
 
@@ -389,6 +389,35 @@ class FileEntry:
 
 
 @dataclass
+class LanguageConfig:
+    """Configuration for a single installer language.
+
+    Attributes:
+        name: Canonical ypack language name (e.g., "English", "SimplifiedChinese").
+        strings: Optional user-defined string overrides for installer UI text.
+            Keys are string IDs (e.g., ``shortcuts_page_title``); values are
+            translated text.  When absent the built-in translations from
+            :mod:`ypack.languages` are used.
+    """
+    name: str
+    strings: Dict[str, str] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: Any) -> LanguageConfig:
+        """Create from a string (simple format) or dict (rich format)."""
+        from .languages import resolve_language_name
+        if isinstance(data, str):
+            return cls(name=resolve_language_name(data))
+        if isinstance(data, dict):
+            raw_name = data.get("name", "")
+            return cls(
+                name=resolve_language_name(raw_name),
+                strings=data.get("strings", {}),
+            )
+        return cls(name=str(data))
+
+
+@dataclass
 class PackageEntry:
     """A component / package for modular installation."""
     name: str
@@ -397,6 +426,9 @@ class PackageEntry:
     optional: bool = False
     default: bool = True
     description: str = ""
+    # Per-language description overrides.  Keys are canonical ypack language
+    # names; values are translated description strings.
+    description_i18n: Dict[str, str] = field(default_factory=dict)
     children: List[PackageEntry] = field(default_factory=list)
     post_install: List[str] = field(default_factory=list)
 
@@ -439,13 +471,30 @@ class PackageEntry:
         else:
             post_install = []
 
+        # Parse description — may be a plain string or a dict of
+        # {language_name: translation} for multilingual descriptions.
+        desc_raw = data.get("description", "")
+        if isinstance(desc_raw, dict):
+            # Multilingual description object
+            description = desc_raw.get("English", next(iter(desc_raw.values()), ""))
+            description_i18n = {k: v for k, v in desc_raw.items() if k != "English"}
+        else:
+            description = str(desc_raw) if desc_raw else ""
+            description_i18n = {}
+
+        # Optional explicit i18n overrides (takes precedence)
+        explicit_i18n = data.get("description_i18n", {})
+        if isinstance(explicit_i18n, dict):
+            description_i18n.update(explicit_i18n)
+
         return cls(
             name=name,
             sources=sources,
             recursive=data.get("recursive", True),
             optional=data.get("optional", False),
             default=data.get("default", True),
-            description=data.get("description", ""),
+            description=description,
+            description_i18n=description_i18n,
             children=children,
             post_install=post_install,
         )
@@ -465,7 +514,10 @@ class PackageConfig:
     signing: Optional[SigningConfig] = None
     update: Optional[UpdateConfig] = None
     logging: Optional[LoggingConfig] = None
-    languages: List[str] = field(default_factory=lambda: ["English"])
+    # If omitted, keep empty to let the installer use system language; when
+    # supplied, controls available languages and whether a language-selection
+    # page is shown (len>1 => selection page).
+    languages: List[LanguageConfig] = field(default_factory=list)
     custom_includes: Dict[str, List[str]] = field(default_factory=dict)
     _raw_dict: Dict[str, Any] = field(default_factory=dict, repr=False)
     _config_dir: str = field(default="", repr=False)
@@ -515,7 +567,10 @@ class PackageConfig:
                 LoggingConfig.from_dict(data["logging"])
                 if "logging" in data else None
             ),
-            languages=data.get("languages", ["English"]),
+            languages=[
+                LanguageConfig.from_dict(item)
+                for item in data.get("languages", [])
+            ],
             custom_includes=data.get("custom_includes", {}),
             _raw_dict=data,
         )

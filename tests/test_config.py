@@ -127,15 +127,17 @@ class TestPackageConfig:
         d = {**self.MINIMAL, "update": {"enabled": True, "update_url": "https://u", "download_url": "https://d"}}
         cfg = PackageConfig.from_dict(d)
         assert cfg.update.download_url == "https://d"
-
     def test_languages_default(self):
         cfg = PackageConfig.from_dict(self.MINIMAL)
-        assert cfg.languages == ["English"]
+        # Default: empty list means system language will be used (no MUI_LANGUAGE)
+        assert cfg.languages == []
 
     def test_languages_custom(self):
         d = {**self.MINIMAL, "languages": ["English", "SimplifiedChinese"]}
         cfg = PackageConfig.from_dict(d)
         assert len(cfg.languages) == 2
+        assert cfg.languages[0].name == "English"
+        assert cfg.languages[1].name == "SimplifiedChinese"
 
     def test_logging(self):
         d = {**self.MINIMAL, "logging": {"enabled": True, "path": "C:\\logs", "level": "DEBUG"}}

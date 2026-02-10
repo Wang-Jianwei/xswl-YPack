@@ -153,6 +153,9 @@ def generate_installer_section(ctx: BuildContext) -> List[str]:
     _emit_env_var_writes(ctx, lines)
 
     # --- Shortcuts ---
+    # Default to creating shortcuts; the installer custom page may override these vars
+    lines.append('  StrCpy $CREATE_DESKTOP_SHORTCUT "1"')
+    lines.append('  StrCpy $CREATE_START_MENU_SHORTCUT "1"')
     _emit_shortcuts(ctx, lines)
     if has_logging and (cfg.install.desktop_shortcut or cfg.install.start_menu_shortcut):
         lines.append('  !insertmacro LogWrite "Shortcuts created."')
@@ -424,7 +427,11 @@ def _emit_shortcuts(ctx: BuildContext, lines: List[str]) -> None:
         # Use custom name if provided, otherwise use ${APP_NAME}
         name = ctx.resolve(desktop_sc.name) if desktop_sc.name else "${APP_NAME}"
         lines.append("  ; Desktop shortcut")
+        lines.append('  StrCmp $CREATE_DESKTOP_SHORTCUT "1" Shortcuts_CreateDesktop')
+        lines.append('  Goto Shortcuts_SkipDesktop')
+        lines.append('Shortcuts_CreateDesktop:')
         lines.append(f'  CreateShortCut "$DESKTOP\\{name}.lnk" "{target}"')
+        lines.append('Shortcuts_SkipDesktop:')
         lines.append("")
 
     start_sc = cfg.install.start_menu_shortcut
@@ -436,9 +443,13 @@ def _emit_shortcuts(ctx: BuildContext, lines: List[str]) -> None:
         name = ctx.resolve(start_sc.name) if start_sc.name else "${APP_NAME}"
         lines.extend([
             "  ; Start menu shortcuts",
+            '  StrCmp $CREATE_START_MENU_SHORTCUT "1" Shortcuts_CreateStartMenu',
+            '  Goto Shortcuts_SkipStartMenu',
+            'Shortcuts_CreateStartMenu:',
             '  CreateDirectory "$SMPROGRAMS\\${APP_NAME}"',
             f'  CreateShortCut "$SMPROGRAMS\\${{APP_NAME}}\\{name}.lnk" "{target}"',
             '  CreateShortCut "$SMPROGRAMS\\${APP_NAME}\\Uninstall.lnk" "$INSTDIR\\Uninstall.exe"',
+            'Shortcuts_SkipStartMenu:',
             "",
         ])
 

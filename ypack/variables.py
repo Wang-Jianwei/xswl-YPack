@@ -3,6 +3,11 @@ Variable system for cross-platform installer configuration.
 
 Defines built-in variables and their mappings across different installer tools
 (NSIS, WIX, Inno Setup, etc.), as well as language identifiers.
+
+Note: For NSIS-specific language metadata (LCID, MUI names, built-in translations),
+see :mod:`ypack.languages` which is the authoritative source used by the converter.
+The ``YPACK_LANGUAGES`` dict here provides cross-platform language identifiers
+for future WIX / Inno Setup support.
 """
 
 from dataclasses import dataclass

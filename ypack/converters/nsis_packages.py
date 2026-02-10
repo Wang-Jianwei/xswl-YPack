@@ -11,6 +11,7 @@ import os
 from typing import List
 
 from .context import BuildContext
+from .nsis_languages import get_nsis_mapping
 from .nsis_sections import _normalize_path, _should_use_recursive, _flatten_packages
 
 
@@ -135,33 +136,55 @@ def generate_package_descriptions(ctx: BuildContext) -> List[str]:
     # Generate LangString definitions for each component/group with a description
     desc_idx = 0
     desc_map = {}  # Maps section_id to DESC_xxx variable name
-    
+
+    langs = ctx.config.languages or []
+
     for pkg, sec_id, is_group in all_pkgs:
         if pkg.description:
             desc_var = f"DESC_{desc_idx}"
             desc_idx += 1
             desc_map[sec_id] = desc_var
-            # Escape quotes in description for NSIS string literal
-            desc = pkg.description.replace('"', '$\\"')
-            lines.append(f'LangString {desc_var} ${{LANG_ENGLISH}} "{desc}"')
-    
+
+            if langs:
+                # Emit a LangString for each configured language.
+                # Use per-language description from description_i18n when
+                # available, otherwise fall back to the default description.
+                for lang_cfg in langs:
+                    mapping = get_nsis_mapping(lang_cfg.name)
+                    if mapping:
+                        lang_const = f'${{{mapping.lang_constant}}}'
+                    else:
+                        lang_const = f'${{LANG_{lang_cfg.name.upper()}}}'
+                    # Look up translated description
+                    i18n = getattr(pkg, 'description_i18n', {}) or {}
+                    lang_desc = i18n.get(lang_cfg.name, pkg.description)
+                    lang_desc = lang_desc.replace('"', '$\\"')
+                    lines.append(f'LangString {desc_var} {lang_const} "{lang_desc}"')
+            else:
+                # No configured languages: emit an English LangString as a fallback
+                desc = pkg.description.replace('"', '$\\"')
+                lines.append(f'LangString {desc_var} ${{LANG_ENGLISH}} "{desc}"')
     lines.extend([
         "",
         "; Bind descriptions to sections",
         "!insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN",
     ])
-    
+
     # Bind each description to its section or group
     for pkg, sec_id, is_group in all_pkgs:
         if pkg.description:
-            desc_var = desc_map[sec_id]
-            lines.append(f'  !insertmacro MUI_DESCRIPTION_TEXT ${{{sec_id}}} $({desc_var})')
-    
+            if sec_id in desc_map:
+                desc_var = desc_map[sec_id]
+                lines.append(f'  !insertmacro MUI_DESCRIPTION_TEXT ${{{sec_id}}} $({desc_var})')
+            else:
+                # Already emitted literal description above
+                pass
+
     lines.extend([
         "!insertmacro MUI_FUNCTION_DESCRIPTION_END",
         "",
     ])
-    
+
     return lines
 
 
