@@ -2,7 +2,8 @@
 Test script for YPack Web UI API.
 """
 
-import requests
+import pytest
+requests = pytest.importorskip("requests")
 import json
 
 BASE_URL = "http://127.0.0.1:5000"
@@ -98,6 +99,37 @@ def test_save_load():
     print(f"  Load status: {response.status_code}")
     loaded = response.json()
     print(f"  Loaded app name: {loaded['config']['app']['name']}")
+    print()
+
+
+def test_convert():
+    """Test conversion endpoint (/api/project/convert)."""
+    print("Testing /api/project/convert...")
+
+    config = {
+        "app": {
+            "name": "MyApp",
+            "version": "1.0.0",
+            "publisher": "Test Co."
+        },
+        "install": {
+            "install_dir": "$PROGRAMFILES64\\MyApp"
+        },
+        "files": ["MyApp.exe"]
+    }
+
+    response = requests.post(
+        f"{BASE_URL}/api/project/convert",
+        json={"config": config, "format": "nsis"}
+    )
+    print(f"  Status: {response.status_code}")
+    assert response.status_code == 200
+    data = response.json()
+    script = data.get('script', '')
+    print(f"  Script length: {len(script)} chars")
+    assert script
+    # Basic sanity checks for NSIS-like output
+    assert '!define' in script or 'Name "' in script or 'OutFile' in script
     print()
 
 if __name__ == "__main__":

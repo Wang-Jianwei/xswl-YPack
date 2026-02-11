@@ -192,3 +192,48 @@ def save_project():
             'yaml_content': '',
             'error': f'Error converting to YAML: {str(e)}'
         }), 500
+
+
+@bp.route('/convert', methods=['POST'])
+def convert_project():
+    """Convert configuration to an installer script (e.g. NSIS).
+
+    Accepts either a full `config` dict or raw `yaml_content`. Optional
+    parameter `format` selects the target backend (default: "nsis").
+    """
+    data = request.get_json() or {}
+    fmt = data.get('format', 'nsis')
+    yaml_content = data.get('yaml_content')
+    config_dict = None
+
+    if yaml_content:
+        try:
+            config_dict = yaml.safe_load(yaml_content)
+            if config_dict is None:
+                return jsonify({'script': '', 'error': 'YAML is empty'}), 400
+        except yaml.YAMLError as e:
+            return jsonify({'script': '', 'error': f'YAML syntax error: {str(e)}'}), 400
+    else:
+        config_dict = data.get('config', {})
+
+    if not config_dict:
+        return jsonify({'script': '', 'error': 'Empty configuration'}), 400
+
+    try:
+        # Build a PackageConfig to ensure the config is valid
+        pkg = PackageConfig.from_dict(config_dict)
+    except Exception as e:
+        return jsonify({'script': '', 'error': f'Config error: {str(e)}'}), 400
+
+    # Perform conversion using the registered converter for the format
+    try:
+        from ypack.converters import get_converter_class
+
+        Converter = get_converter_class(fmt)
+        converter = Converter(pkg, config_dict)
+        script = converter.convert()
+        return jsonify({'script': script, 'format': fmt})
+    except ValueError as e:
+        return jsonify({'script': '', 'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'script': '', 'error': f'Conversion error: {str(e)}'}), 500

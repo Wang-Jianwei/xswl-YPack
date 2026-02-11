@@ -322,11 +322,10 @@ def render_packages(packages: Dict[str, Any], files: Iterable[Any] | None = None
         body_lines.append('subgraph n_unassigned_files["Unassigned files"]')
         for u in unassigned_files:
             fid = sanitize_id(f"file_un_{len(u.get('src') or '')}_{abs(hash(u.get('src') or ''))%10000}")
-            body_lines.append(f'{fid}["{escape_label(u.get('src'), 100)}"]')
+            body_lines.append(f'{fid}["{escape_label(u.get("src"), 100)}"]')
         body_lines.append("end")
 
     return "\n".join(body_lines) + "\n", top_level_nodes, package_info
-
 
 def generate_mermaid(data: Dict[str, Any]) -> str:
     parts = []

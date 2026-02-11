@@ -193,6 +193,11 @@
         .status-dot.invalid {
             background: #F56C6C;
         }
+
+        /* Visual editor */
+        .visual-editor { height: 100%; }
+        .visual-comp:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.06); }
+        .visual-comp { transition: box-shadow 0.12s ease; }
     </style>
 </head>
 <body>
@@ -267,12 +272,43 @@
             <!-- Center Panel: YAML Editor -->
             <div class="center-panel">
                 <el-tabs v-model="activeTab" class="editor-tabs">
-                    <el-tab-pane label="YAML 编辑器" name="yaml"></el-tab-pane>
-                    <el-tab-pane label="可视化" name="visual" disabled></el-tab-pane>
+                    <el-tab-pane label="YAML 编辑器" name="yaml">
+                        <div class="editor-content">
+                            <div id="yaml-editor"></div>
+                        </div>
+                    </el-tab-pane>
+
+                    <el-tab-pane label="可视化" name="visual">
+                        <div class="editor-content visual-editor">
+                            <div style="display:flex;height:100%">
+                                <!-- Palette -->
+                                <div style="width:200px;padding:10px;border-right:1px solid #eee;background:#fafafa">
+                                    <h4 style="margin-bottom:10px">组件库</h4>
+                                    <div draggable="true" @dragstart="onDragStart($event,'file')" style="padding:8px;border:1px dashed #dcdfe6;border-radius:4px;margin-bottom:8px;cursor:grab">文件 (File)</div>
+                                    <div draggable="true" @dragstart="onDragStart($event,'shortcut')" style="padding:8px;border:1px dashed #dcdfe6;border-radius:4px;margin-bottom:8px;cursor:grab">快捷方式 (Shortcut)</div>
+                                    <div draggable="true" @dragstart="onDragStart($event,'folder')" style="padding:8px;border:1px dashed #dcdfe6;border-radius:4px;margin-bottom:8px;cursor:grab">文件夹 (Folder)</div>
+                                    <el-button type="primary" size="small" style="margin-top:12px;" @click="applyVisualToConfig">将可视化项应用到配置</el-button>
+                                </div>
+
+                                <!-- Canvas -->
+                                <div style="flex:1;padding:10px;position:relative" @dragover.prevent @drop="onDrop($event)">
+                                    <h4 style="margin-top:0">画布</h4>
+                                    <div v-if="visualComponents.length===0" style="color:#909399;padding:20px">将组件从左侧拖放到此处以创建可视化项</div>
+                                    <div v-for="(c, i) in visualComponents" :key="i" class="visual-comp" style="padding:8px;border:1px solid #EBEEF5;margin:6px;border-radius:4px;background:white;display:flex;justify-content:space-between;align-items:center">
+                                        <div>
+                                            <strong>{{ c.type }}</strong>
+                                            <div style="font-size:12px;color:#909399">{{ c.props.source || '未设置' }}</div>
+                                        </div>
+                                        <div>
+                                            <el-button type="text" size="mini" @click="editVisual(i)">编辑</el-button>
+                                            <el-button type="text" size="mini" @click="removeVisual(i)">删除</el-button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </el-tab-pane>
                 </el-tabs>
-                <div class="editor-content">
-                    <div id="yaml-editor"></div>
-                </div>
             </div>
             
             <!-- Right Panel: Preview -->
@@ -422,6 +458,56 @@
                         console.error('Error syncing to YAML:', error);
                     }
                 }
+
+                // -------------------- 可视化 编辑器逻辑 --------------------
+                const visualComponents = reactive([]);
+
+                function onDragStart(e, type) {
+                    e.dataTransfer.setData('text/plain', type);
+                }
+
+                function onDrop(e) {
+                    const type = e.dataTransfer.getData('text/plain') || 'file';
+                    // Create a simple visual component (props can be edited later)
+                    visualComponents.push({ type: type, props: {} });
+                }
+
+                function removeVisual(index) {
+                    visualComponents.splice(index, 1);
+                }
+
+                function editVisual(index) {
+                    const c = visualComponents[index];
+                    ElMessageBox.prompt('请输入源路径（source）', `编辑 ${c.type}`, {
+                        confirmButtonText: '确定',
+                        cancelButtonText: '取消',
+                        inputValue: c.props.source || ''
+                    }).then(({ value }) => {
+                        c.props.source = value;
+                    }).catch(() => {});
+                }
+
+                function applyVisualToConfig() {
+                    // Map visual file-like components to config.files entries
+                    if (!config.files) config.files = [];
+                    visualComponents.forEach((c, idx) => {
+                        if (c.type === 'file') {
+                            // If source set, use it; otherwise generate a placeholder
+                            const src = c.props.source || `visual-file-${idx + 1}.bin`;
+                            config.files.push(src);
+                        } else if (c.type === 'folder') {
+                            const src = c.props.source || `visual-folder-${idx + 1}`;
+                            config.files.push({ source: src, destination: '$INSTDIR' });
+                        } else if (c.type === 'shortcut') {
+                            // Shortcuts are not files — add as a metadata entry
+                            if (!config.shortcuts) config.shortcuts = [];
+                            config.shortcuts.push({ name: c.props.source || `Shortcut ${idx + 1}` });
+                        }
+                    });
+                    onConfigChange();
+                    ElMessage.success('已将可视化项应用到配置（即将同步到 YAML）');
+                }
+                // ----------------------------------------------------------
                 
                 // Load from YAML
                 async function loadFromYaml() {
@@ -599,7 +685,14 @@
                     validateYaml,
                     addFile,
                     confirmAddFile,
-                    removeFile
+                    removeFile,
+                    // Visual editor bindings
+                    visualComponents,
+                    onDragStart,
+                    onDrop,
+                    removeVisual,
+                    editVisual,
+                    applyVisualToConfig
                 };
             }
         }).use(ElementPlus).mount('#app');

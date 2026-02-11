@@ -42,6 +42,7 @@ dev = [
     "jsonschema>=4.0",
     "flask>=3.0",
     "flask-cors>=4.0",
+    "requests>=2.25",
 ]
 
 [tool.setuptools.packages.find]
