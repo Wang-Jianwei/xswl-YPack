@@ -30,7 +30,7 @@ app:
 install:
   install_dir: "$PROGRAMFILES64\\${app.name}"     # 安装目标目录（支持内置变量（$VAR）和配置引用（${app.name}））
 
-  # 注意：desktop_shortcut、start_menu_shortcut、registry_entries、env_vars、file_associations
+  # 注意：desktop_shortcut、start_menu_shortcut、shortcuts、registry_entries、env_vars、file_associations
   # 这些字段也可以写在 packages 中的各个组件下，这样只有该组件被选中安装时，对应操作才会执行。
   # 写在 install 段的是全局配置，始终会执行。推荐将与特定组件相关的操作写在 packages 中。
 
@@ -41,6 +41,19 @@ install:
   start_menu_shortcut:                            # 开始菜单快捷方式配置（全局，始终执行；也可写在 packages 下按组件执行）
     name: "${app.name}"                           # 开始菜单快捷方式名称（可选，默认使用应用名）
     target: "$INSTDIR\\bin\\MyApp.exe"            # 开始菜单快捷方式目标（可选）
+
+  shortcuts:                                      # 自定义快捷方式列表（全局，始终执行；也可写在 packages 下按组件执行）
+    - name: "MyTool"                              # 快捷方式名称（必填）
+      location: "Desktop"                        # Desktop | StartMenu | QuickLaunch | 自定义路径
+      target: "$INSTDIR\\bin\\MyTool.exe"       # 目标程序
+      icon: "$INSTDIR\\icons\\mytool.ico"       # 图标（可选）
+      args: "--help"                             # 启动参数（可选）
+      workdir: "$INSTDIR\\bin"                  # 工作路径（可选）
+      label:                                      # 安装界面显示名（多语言）
+        zh-CN: "创建MyTool桌面快捷方式"
+        en-US: "Create MyTool Desktop Shortcut"
+      optional: true                              # 是否显示为可选项
+      default: true                               # 可选项默认是否勾选
 
   registry_key: "Software\\${app.publisher}\\${app.name}" # 注册表键路径（用于存储安装信息等）
   registry_view: "auto"                                   # 注册表视图：auto | 32 | 64（默认 auto，根据系统自动选择）
@@ -135,6 +148,15 @@ packages:                                       # 包/组件配置（支持嵌�
     start_menu_shortcut:                        # 开始菜单快捷方式（仅 Core 安装时创建）
       name: "${app.name}"
       target: "$INSTDIR\\bin\\MyApp.exe"
+    shortcuts:                                  # 自定义快捷方式（仅 Core 安装时创建）
+      - name: "MyApp Docs"
+        location: "StartMenu"
+        target: "$INSTDIR\\docs\\index.html"
+        label:
+          en-US: "Open MyApp Docs"
+          zh-CN: "打开 MyApp 文档"
+        optional: true
+        default: false
     registry_entries:                           # 注册表项（仅 Core 安装时写入）
       - hive: "HKLM"
         key: "Software\\${app.publisher}\\${app.name}"

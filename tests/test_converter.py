@@ -150,6 +150,58 @@ class TestInstallerSection:
         assert 'LangString SC_LABEL_1 ${LANG_SIMPCHINESE}' in script
         assert '创建开始菜单快捷方式' in script
 
+    def test_custom_shortcuts_optional_label(self):
+        cfg = _simple_config(languages=["English"])
+        from ypack.config import ShortcutConfig
+        cfg.install.shortcuts = [
+            ShortcutConfig(
+                name="MyTool",
+                target="$INSTDIR\\MyTool.exe",
+                location="Desktop",
+                label=LangText.from_value({"English": "Create MyTool Desktop Shortcut"}),
+                optional=True,
+                default=False,
+            )
+        ]
+        script = YamlToNsisConverter(cfg).convert()
+        assert 'Var CREATE_SC_0' in script
+        assert 'Page custom ShortcutOptions_Create ShortcutOptions_Leave' in script
+        assert 'LangString SC_LABEL_0 ${LANG_ENGLISH} "Create MyTool Desktop Shortcut"' in script
+        assert 'StrCpy $CREATE_SC_0 "0"' in script
+
+    def test_custom_shortcut_workdir_warning(self):
+        cfg = _simple_config(languages=["English"])
+        from ypack.config import ShortcutConfig
+        cfg.install.shortcuts = [
+            ShortcutConfig(
+                name="ToolWithWorkdir",
+                target="$INSTDIR\\tool.exe",
+                location="$INSTDIR",
+                workdir="$INSTDIR\\bin",
+                optional=False,
+            )
+        ]
+        script = YamlToNsisConverter(cfg).convert()
+        # Warning comment about workdir should be present
+        assert 'WARNING: requested workdir' in script
+        # workdir must NOT appear as a trailing parameter to CreateShortCut
+        assert 'CreateShortCut' in script
+        assert '"$INSTDIR\\bin"' not in script.split('CreateShortCut', 2)[1]
+
+    def test_custom_shortcuts_non_optional_no_page(self):
+        cfg = _simple_config()
+        from ypack.config import ShortcutConfig
+        cfg.install.shortcuts = [
+            ShortcutConfig(
+                name="MyTool",
+                target="$INSTDIR\\MyTool.exe",
+                location="Desktop",
+                optional=False,
+            )
+        ]
+        script = YamlToNsisConverter(cfg).convert()
+        assert 'Page custom ShortcutOptions_Create ShortcutOptions_Leave' not in script
+
     def test_remote_file(self):
         cfg = _simple_config()
         cfg.files = [FileEntry(source="https://x.com/f.bin", checksum_type="sha256", checksum_value="abc", decompress=True)]

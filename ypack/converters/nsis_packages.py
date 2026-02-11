@@ -92,8 +92,8 @@ def generate_package_sections(ctx: BuildContext) -> List[str]:
                     _emit_env_var_writes_for(ctx, lines, pkg.env_vars)
 
                 # Per-package shortcuts
-                if pkg.desktop_shortcut or pkg.start_menu_shortcut:
-                    _emit_shortcuts_for(ctx, lines, pkg.desktop_shortcut, pkg.start_menu_shortcut, sec_name)
+                if pkg.desktop_shortcut or pkg.start_menu_shortcut or pkg.shortcuts:
+                    _emit_shortcuts_for(ctx, lines, sec_name)
 
                 # Per-package file associations
                 if pkg.file_associations:
@@ -415,7 +415,11 @@ def generate_oninit(ctx: BuildContext) -> List[str]:
     if all_sc:
         lines.append('  ; Default shortcut states (overridden by ShortcutOptions page)')
         for sc in all_sc:
-            lines.append(f'  StrCpy $CREATE_SC_{sc.idx} "1"')
+            if not sc.config.optional:
+                state = "1"
+            else:
+                state = "1" if sc.config.default else "0"
+            lines.append(f'  StrCpy $CREATE_SC_{sc.idx} "{state}"')
         lines.append('')
 
     # Section flags for packages
@@ -557,18 +561,8 @@ def _generate_existing_install_check(ctx: BuildContext) -> List[str]:
             lines.append(f'  !insertmacro LogWrite "Running existing uninstaller: $R1\\Uninstall.exe {uninst_args}"')
             lines.append('  !insertmacro LogWrite "Waiting for uninstaller to finish (no timeout)"')
         lines.extend([
-            f'  ExecWait \'$R1\\Uninstall.exe {uninst_args}\'',
-            "  ; Wait for uninstaller to finish (no timeout)",
-            "_ei_wait_loop:",
-            "  Sleep 500",
-            '  IfFileExists "$R1\\Uninstall.exe" _ei_wait_loop _ei_wait_done',
-            "_ei_wait_done:",
-        ])
-        if has_logging:
-            lines.append('  !insertmacro LogWrite "Uninstaller finished."')
-        lines.extend([
-            "  ; Verify uninstaller is gone",
-            '  IfFileExists "$R1\\Uninstall.exe" 0 _ei_done',
+            f'  ExecWait \'$R1\\Uninstall.exe {uninst_args}\' $R4',
+            '  StrCmp $R4 "0" _ei_done',
             '  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "The previous uninstaller did not finish.  Retry or cancel installation?" IDRETRY _ei_do_uninstall',
             '  ; Fall through to cancel',
         ])
@@ -581,24 +575,12 @@ def _generate_existing_install_check(ctx: BuildContext) -> List[str]:
             lines.append(f'  !insertmacro LogWrite "Running existing uninstaller: $R1\\Uninstall.exe {uninst_args}"')
             lines.append(f'  !insertmacro LogWrite "Waiting for uninstaller to finish (up to {wait_ms}ms)"')
         lines.extend([
-            f'  ExecWait \'$R1\\Uninstall.exe {uninst_args}\'',
-            f'  ; Wait for uninstaller to finish (up to {wait_ms}ms)',
-            '  StrCpy $R3 0',
-            "_ei_wait_loop:",
-            f'  ; Loop: if $R3 >= {wait_ms} goto _ei_wait_done, else continue waiting',
-            f'  IntCmp $R3 {wait_ms} _ei_wait_done _ei_wait_done _ei_wait_continue',
-            '_ei_wait_continue:',
-            '  Sleep 500',
-            '  IntOp $R3 $R3 + 500',
-            '  IfFileExists "$R1\\Uninstall.exe" _ei_wait_loop _ei_wait_done',
-            '_ei_wait_done:',
+            f'  ExecWait \'$R1\\Uninstall.exe {uninst_args}\' $R4',
+            '  StrCmp $R4 "0" _ei_done',
         ])
         if has_logging:
-            lines.append('  !insertmacro LogWrite "Uninstaller finished."')
+            lines.append('  !insertmacro LogWrite "Uninstaller returned a non-zero exit code."')
         lines.extend([
-            '  ; Verify uninstaller is gone',
-            '  IfFileExists "$R1\\Uninstall.exe" 0 _ei_done',
-            '  !insertmacro LogWrite "Uninstaller did not finish within timeout."',
             '  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "The previous uninstaller did not finish.  Retry or cancel installation?" IDRETRY _ei_do_uninstall',
             '  ; Fall through to cancel',
         ])
@@ -666,14 +648,14 @@ def generate_existing_install_helpers(ctx: BuildContext) -> List[str]:
         if ei.show_version_info:
             lines.extend([
                 '  StrCmp $R2 "" _eid_prompt_no_ver 0',
-                '  MessageBox MB_YESNO|MB_ICONQUESTION "An existing installation (version $R2) was found at:$\\r$\\n$R1$\\r$\\n\\r$\\nUninstall it first and continue?" IDYES _eid_do_uninstall IDNO _eid_cancel',
+                '  MessageBox MB_YESNO|MB_ICONQUESTION "An existing installation (version $R2) was found at:$\\r$\\n$R1$\\r$\\n$\\r$\\nUninstall it first and continue?" IDYES _eid_do_uninstall IDNO _eid_cancel',
                 '  Goto _eid_prompt_done',
                 '_eid_prompt_no_ver:',
-                '  MessageBox MB_YESNO|MB_ICONQUESTION "An existing installation was found at:$\\r$\\n$R1$\\r$\\n\\r$\\nUninstall it first and continue?" IDYES _eid_do_uninstall IDNO _eid_cancel',
+                '  MessageBox MB_YESNO|MB_ICONQUESTION "An existing installation was found at:$\\r$\\n$R1$\\r$\\n$\\r$\\nUninstall it first and continue?" IDYES _eid_do_uninstall IDNO _eid_cancel',
                 '_eid_prompt_done:',
             ])
         else:
-            lines.append('  MessageBox MB_YESNO|MB_ICONQUESTION "An existing installation was found at:$\\r$\\n$R1$\\r$\\n\\r$\\nUninstall it first and continue?" IDYES _eid_do_uninstall IDNO _eid_cancel')
+            lines.append('  MessageBox MB_YESNO|MB_ICONQUESTION "An existing installation was found at:$\\r$\\n$R1$\\r$\\n$\\r$\\nUninstall it first and continue?" IDYES _eid_do_uninstall IDNO _eid_cancel')
     elif ei.mode == "auto_uninstall":
         lines.append('  Goto _eid_do_uninstall')
     elif ei.mode == "abort":
@@ -706,18 +688,8 @@ def generate_existing_install_helpers(ctx: BuildContext) -> List[str]:
             lines.append(f'  !insertmacro LogWrite "Running existing uninstaller: $R1\\Uninstall.exe {uninst_args}"')
             lines.append('  !insertmacro LogWrite "Waiting for uninstaller to finish (no timeout)"')
         lines.extend([
-            f'  ExecWait \'$R1\\Uninstall.exe {uninst_args}\'',
-            '  ; Wait for uninstaller to finish (no timeout)',
-            '_eid_wait_loop:',
-            '  Sleep 500',
-            '  IfFileExists "$R1\\Uninstall.exe" _eid_wait_loop _eid_wait_done',
-            '_eid_wait_done:',
-        ])
-        if has_logging:
-            lines.append('  !insertmacro LogWrite "Uninstaller finished."')
-        lines.extend([
-            '  ; Verify uninstaller is gone',
-            '  IfFileExists "$R1\\Uninstall.exe" 0 _eid_done',
+            f'  ExecWait \'$R1\\Uninstall.exe {uninst_args}\' $R4',
+            '  StrCmp $R4 "0" _eid_done',
             '  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "The previous uninstaller did not finish.  Retry or cancel installation?" IDRETRY _eid_do_uninstall IDCANCEL _eid_cancel',
         ])
     else:
@@ -728,24 +700,12 @@ def generate_existing_install_helpers(ctx: BuildContext) -> List[str]:
             lines.append(f'  !insertmacro LogWrite "Running existing uninstaller: $R1\\Uninstall.exe {uninst_args}"')
             lines.append(f'  !insertmacro LogWrite "Waiting for uninstaller to finish (up to {wait_ms}ms)"')
         lines.extend([
-            f'  ExecWait \'$R1\\Uninstall.exe {uninst_args}\'',
-            f'  ; Wait for uninstaller to finish (up to {wait_ms}ms)',
-            '  StrCpy $R3 0',
-            "_eid_wait_loop:",
-            f'  ; Loop: if $R3 >= {wait_ms} goto _eid_wait_done, else continue waiting',
-            f'  IntCmp $R3 {wait_ms} _eid_wait_done _eid_wait_done _eid_wait_continue',
-            '_eid_wait_continue:',
-            '  Sleep 500',
-            '  IntOp $R3 $R3 + 500',
-            '  IfFileExists "$R1\\Uninstall.exe" _eid_wait_loop _eid_wait_done',
-            '_eid_wait_done:',
+            f'  ExecWait \'$R1\\Uninstall.exe {uninst_args}\' $R4',
+            '  StrCmp $R4 "0" _eid_done',
         ])
         if has_logging:
-            lines.append('  !insertmacro LogWrite "Uninstaller finished."')
+            lines.append('  !insertmacro LogWrite "Uninstaller returned a non-zero exit code."')
         lines.extend([
-            '  ; Verify uninstaller is gone',
-            '  IfFileExists "$R1\\Uninstall.exe" 0 _eid_done',
-            '  !insertmacro LogWrite "Uninstaller did not finish within timeout."',
             '  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "The previous uninstaller did not finish.  Retry or cancel installation?" IDRETRY _eid_do_uninstall IDCANCEL _eid_cancel',
         ])
 

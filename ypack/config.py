@@ -161,9 +161,16 @@ class FileAssociation:
 
 @dataclass
 class ShortcutConfig:
-    """Shortcut configuration (desktop / start menu)."""
+    """Shortcut configuration (desktop / start menu / custom location)."""
     name: str = ""
     target: str = ""
+    location: str = "Desktop"
+    icon: str = ""
+    args: str = ""
+    workdir: str = ""
+    label: LangText = field(default_factory=LangText)
+    optional: bool = True
+    default: bool = True
 
     @classmethod
     def from_dict(cls, data: Any) -> ShortcutConfig:
@@ -171,6 +178,13 @@ class ShortcutConfig:
             return cls(
                 name=data.get("name", ""),
                 target=data.get("target", ""),
+                location=data.get("location", "Desktop"),
+                icon=data.get("icon", ""),
+                args=data.get("args", ""),
+                workdir=data.get("workdir", ""),
+                label=LangText.from_value(data.get("label", "")),
+                optional=bool(data.get("optional", True)),
+                default=bool(data.get("default", True)),
             )
         # For backwards compatibility: treat string as target
         return cls(name="", target=str(data) if data else "")
@@ -315,6 +329,7 @@ class InstallConfig:
     install_dir: str = "$PROGRAMFILES64\\${APP_NAME}"
     desktop_shortcut: Optional[ShortcutConfig] = None
     start_menu_shortcut: Optional[ShortcutConfig] = None
+    shortcuts: List[ShortcutConfig] = field(default_factory=list)
     registry_entries: List[RegistryEntry] = field(default_factory=list)
     env_vars: List[EnvVarEntry] = field(default_factory=list)
     file_associations: List[FileAssociation] = field(default_factory=list)
@@ -363,6 +378,10 @@ class InstallConfig:
             ei.allow_multiple = True
 
         # Parse shortcuts (support new and legacy formats)
+        shortcut_list: List[ShortcutConfig] = []
+        raw_shortcuts = data.get("shortcuts", [])
+        if isinstance(raw_shortcuts, list):
+            shortcut_list = [ShortcutConfig.from_dict(sc) for sc in raw_shortcuts]
         desktop_sc = None
         if "desktop_shortcut" in data:
             desktop_sc = ShortcutConfig.from_dict(data["desktop_shortcut"])
@@ -381,6 +400,7 @@ class InstallConfig:
             install_dir=data.get("install_dir", "$PROGRAMFILES64\\${app.name}"),
             desktop_shortcut=desktop_sc,
             start_menu_shortcut=start_sc,
+            shortcuts=shortcut_list,
             registry_entries=registry_entries,
             env_vars=env_vars,
             file_associations=file_associations,
@@ -479,6 +499,7 @@ class PackageEntry:
     # Per-package install actions (only executed when this package is selected)
     desktop_shortcut: Optional[ShortcutConfig] = None
     start_menu_shortcut: Optional[ShortcutConfig] = None
+    shortcuts: List[ShortcutConfig] = field(default_factory=list)
     registry_entries: List[RegistryEntry] = field(default_factory=list)
     env_vars: List[EnvVarEntry] = field(default_factory=list)
     file_associations: List[FileAssociation] = field(default_factory=list)
@@ -535,6 +556,10 @@ class PackageEntry:
                 description.translations[canonical] = str(value) if value is not None else ""
 
         # Per-package shortcuts
+        shortcut_list: List[ShortcutConfig] = []
+        raw_shortcuts = data.get("shortcuts", [])
+        if isinstance(raw_shortcuts, list):
+            shortcut_list = [ShortcutConfig.from_dict(sc) for sc in raw_shortcuts]
         desktop_sc_data = data.get("desktop_shortcut")
         desktop_sc = ShortcutConfig.from_dict(desktop_sc_data) if desktop_sc_data else None
         start_menu_sc_data = data.get("start_menu_shortcut")
@@ -559,6 +584,7 @@ class PackageEntry:
             post_install=post_install,
             desktop_shortcut=desktop_sc,
             start_menu_shortcut=start_menu_sc,
+            shortcuts=shortcut_list,
             registry_entries=reg_entries,
             env_vars=env_vars,
             file_associations=file_assocs,

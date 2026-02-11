@@ -21,7 +21,7 @@ from ..config import LangText, ShortcutConfig
 class ShortcutEntry(NamedTuple):
     """Describes a single shortcut definition for per-shortcut checkbox support."""
     idx: int            # Unique sequential index across all shortcuts
-    sc_type: str        # "desktop" or "startmenu"
+    sc_type: str        # "desktop", "startmenu", "quicklaunch", or "custom"
     config: ShortcutConfig      # ShortcutConfig instance
     section: str        # "global" or "SEC_PKG_<n>"
     resolved_name: str  # Resolved .lnk display name
@@ -37,6 +37,45 @@ def _normalize_path(path: str) -> str:
     path = path.replace("**/", "")
     path = path.replace("/", "\\")
     return path
+
+
+def _escape_nsis(value: str) -> str:
+    return value.replace('"', '$\\"')
+
+
+def _resolve_shortcut_path(ctx: BuildContext, path: str) -> str:
+    if not path:
+        return ""
+    resolved = ctx.resolve(path).replace("/", "\\")
+    if not (resolved.startswith("$") or re.match(r"^[A-Za-z]:\\", resolved)):
+        resolved = f"$INSTDIR\\{resolved}"
+    return resolved
+
+
+def _shortcut_kind(location: str) -> str:
+    loc = (location or "Desktop").strip().lower()
+    if loc in ("desktop", "desk"):
+        return "desktop"
+    if loc in ("startmenu", "start_menu", "start menu"):
+        return "startmenu"
+    if loc in ("quicklaunch", "quick_launch", "quick launch"):
+        return "quicklaunch"
+    return "custom"
+
+
+def _shortcut_base_dir(ctx: BuildContext, sc: ShortcutEntry) -> str:
+    if sc.sc_type == "desktop":
+        return "$DESKTOP"
+    if sc.sc_type == "startmenu":
+        return "$SMPROGRAMS\\${APP_NAME}"
+    if sc.sc_type == "quicklaunch":
+        return "$QUICKLAUNCH"
+    return _resolve_shortcut_path(ctx, sc.config.location)
+
+
+def _shortcut_link_path(ctx: BuildContext, sc: ShortcutEntry) -> str:
+    base_dir = _shortcut_base_dir(ctx, sc).rstrip("\\")
+    return f"{base_dir}\\{sc.resolved_name}.lnk"
 
 
 def _should_use_recursive(source: str) -> bool:
@@ -164,7 +203,7 @@ def generate_installer_section(ctx: BuildContext) -> List[str]:
 
     # --- Shortcuts ---
     _emit_shortcuts(ctx, lines)
-    if has_logging and (cfg.install.desktop_shortcut or cfg.install.start_menu_shortcut):
+    if has_logging and collect_all_shortcuts(ctx):
         lines.append('  !insertmacro LogWrite "Shortcuts created."')
         lines.append("")
 
@@ -247,21 +286,9 @@ def generate_uninstaller_section(ctx: BuildContext) -> List[str]:
     ])
 
     # Remove shortcuts
-    if cfg.install.desktop_shortcut:
-        lines.append("  ; Remove desktop shortcut")
-        desktop_name = ctx.resolve(cfg.install.desktop_shortcut.name) if cfg.install.desktop_shortcut.name else "${APP_NAME}"
-        lines.append(f'  Delete "$DESKTOP\\{desktop_name}.lnk"')
-        lines.append("")
+    _emit_shortcut_removes(ctx, lines)
 
-    if cfg.install.start_menu_shortcut:
-        lines.append("  ; Remove start menu shortcuts")
-        start_name = ctx.resolve(cfg.install.start_menu_shortcut.name) if cfg.install.start_menu_shortcut.name else "${APP_NAME}"
-        lines.append(f'  Delete "$SMPROGRAMS\\${{APP_NAME}}\\{start_name}.lnk"')
-        lines.append('  Delete "$SMPROGRAMS\\${APP_NAME}\\Uninstall.lnk"')
-        lines.append('  RMDir "$SMPROGRAMS\\${APP_NAME}"')
-        lines.append("")
-
-    if has_logging and (cfg.install.desktop_shortcut or cfg.install.start_menu_shortcut):
+    if has_logging and collect_all_shortcuts(ctx):
         lines.append('  !insertmacro LogWrite "Shortcuts removed."')
         lines.append("")
 
@@ -341,20 +368,12 @@ def _emit_per_package_uninstall(ctx: BuildContext, lines: List[str]) -> None:
     """Emit cleanup for per-package registry, env vars, shortcuts, file associations."""
     for pkg in _flatten_packages(ctx.config.packages):
         has_actions = (pkg.registry_entries or pkg.env_vars or
-                       pkg.desktop_shortcut or pkg.start_menu_shortcut or
+                       pkg.desktop_shortcut or pkg.start_menu_shortcut or pkg.shortcuts or
                        pkg.file_associations)
         if not has_actions:
             continue
 
         lines.append(f"  ; Cleanup for package: {pkg.name}")
-
-        # Remove per-package shortcuts
-        if pkg.desktop_shortcut and pkg.desktop_shortcut.name:
-            name = ctx.resolve(pkg.desktop_shortcut.name)
-            lines.append(f'  Delete "$DESKTOP\\{name}.lnk"')
-        if pkg.start_menu_shortcut and pkg.start_menu_shortcut.name:
-            name = ctx.resolve(pkg.start_menu_shortcut.name)
-            lines.append(f'  Delete "$SMPROGRAMS\\${{APP_NAME}}\\{name}.lnk"')
 
         # Remove per-package registry entries
         for entry in pkg.registry_entries:
@@ -487,28 +506,39 @@ def collect_all_shortcuts(ctx: BuildContext) -> List[ShortcutEntry]:
     entries: List[ShortcutEntry] = []
     idx = 0
 
-    # Global install shortcuts
+    def _append(sc_cfg: ShortcutConfig, section: str) -> None:
+        nonlocal idx
+        if not sc_cfg or not sc_cfg.target:
+            return
+        name = ctx.resolve(sc_cfg.name) if sc_cfg.name else "${APP_NAME}"
+        sc_type = _shortcut_kind(sc_cfg.location)
+        entries.append(ShortcutEntry(idx, sc_type, sc_cfg, section, name))
+        idx += 1
+
+    # Global install shortcuts (legacy)
     if cfg.install.desktop_shortcut and cfg.install.desktop_shortcut.target:
-        name = ctx.resolve(cfg.install.desktop_shortcut.name) if cfg.install.desktop_shortcut.name else "${APP_NAME}"
-        entries.append(ShortcutEntry(idx, "desktop", cfg.install.desktop_shortcut, "global", name))
-        idx += 1
+        cfg.install.desktop_shortcut.location = "Desktop"
+        _append(cfg.install.desktop_shortcut, "global")
     if cfg.install.start_menu_shortcut and cfg.install.start_menu_shortcut.target:
-        name = ctx.resolve(cfg.install.start_menu_shortcut.name) if cfg.install.start_menu_shortcut.name else "${APP_NAME}"
-        entries.append(ShortcutEntry(idx, "startmenu", cfg.install.start_menu_shortcut, "global", name))
-        idx += 1
+        cfg.install.start_menu_shortcut.location = "StartMenu"
+        _append(cfg.install.start_menu_shortcut, "global")
+
+    # Global install shortcuts (new list)
+    for sc in cfg.install.shortcuts:
+        _append(sc, "global")
 
     # Per-package shortcuts (ordered by _flatten_packages)
     flat = _flatten_packages(cfg.packages)
     for pkg_idx, pkg in enumerate(flat):
         sec_name = f"SEC_PKG_{pkg_idx}"
         if pkg.desktop_shortcut and pkg.desktop_shortcut.target:
-            name = ctx.resolve(pkg.desktop_shortcut.name) if pkg.desktop_shortcut.name else "${APP_NAME}"
-            entries.append(ShortcutEntry(idx, "desktop", pkg.desktop_shortcut, sec_name, name))
-            idx += 1
+            pkg.desktop_shortcut.location = "Desktop"
+            _append(pkg.desktop_shortcut, sec_name)
         if pkg.start_menu_shortcut and pkg.start_menu_shortcut.target:
-            name = ctx.resolve(pkg.start_menu_shortcut.name) if pkg.start_menu_shortcut.name else "${APP_NAME}"
-            entries.append(ShortcutEntry(idx, "startmenu", pkg.start_menu_shortcut, sec_name, name))
-            idx += 1
+            pkg.start_menu_shortcut.location = "StartMenu"
+            _append(pkg.start_menu_shortcut, sec_name)
+        for sc in pkg.shortcuts:
+            _append(sc, sec_name)
 
     return entries
 
@@ -518,37 +548,48 @@ def _emit_single_shortcut(ctx: BuildContext, lines: List[str],
                           add_uninstaller_link: bool = False) -> None:
     """Emit conditional CreateShortCut for a single shortcut, guarded by $CREATE_SC_<index>."""
     i = sc.idx
-    target = ctx.resolve(sc.config.target)
-    if not (target.startswith("$") or re.match(r"^[A-Za-z]:\\", target)):
-        target = f"$INSTDIR\\{target}"
+    target = _escape_nsis(_resolve_shortcut_path(ctx, sc.config.target))
     name = sc.resolved_name
+    link_path = _escape_nsis(_shortcut_link_path(ctx, sc))
+    base_dir = _escape_nsis(_shortcut_base_dir(ctx, sc))
+    args = _escape_nsis(ctx.resolve(sc.config.args)) if sc.config.args else ""
+    icon = _resolve_shortcut_path(ctx, sc.config.icon) if sc.config.icon else ""
+    icon = _escape_nsis(icon) if icon else ""
+    workdir = _resolve_shortcut_path(ctx, sc.config.workdir) if sc.config.workdir else ""
+    workdir = _escape_nsis(workdir) if workdir else ""
 
-    if sc.sc_type == "desktop":
+    create_dir = "" if base_dir in ("$DESKTOP", "$QUICKLAUNCH") else f'  CreateDirectory "{base_dir}"'
+    # NOTE: NSIS CreateShortCut does not support specifying a working directory.
+    # If a workdir is requested, emit a warning comment and do not pass it as an argument
+    if sc.config.workdir:
+        workdir_raw = ctx.resolve(sc.config.workdir)
+        lines.append(f'  ; WARNING: requested workdir "{workdir_raw}" cannot be set by CreateShortCut and will be ignored')
+    if args or icon:
+        args_part = f'"{args}"' if args else '""'
+        icon_part = f'"{icon}"' if icon else '""'
+        # Use icon index 0 when icon is provided, otherwise omit
+        if icon:
+            create_line = f'  CreateShortCut "{link_path}" "{target}" {args_part} {icon_part} 0'
+        else:
+            create_line = f'  CreateShortCut "{link_path}" "{target}" {args_part}'
+    else:
+        create_line = f'  CreateShortCut "{link_path}" "{target}"'
+
+    lines.append(f"  ; Shortcut ({name})")
+    if sc.config.optional:
         lines.extend([
-            f"  ; Desktop shortcut ({name})",
             f'  StrCmp $CREATE_SC_{i} "1" SC_Create_{i}',
             f'  Goto SC_Skip_{i}',
             f'SC_Create_{i}:',
-            f'  CreateShortCut "$DESKTOP\\{name}.lnk" "{target}"',
-            f'SC_Skip_{i}:',
-            "",
         ])
-    else:  # startmenu
-        inner = [
-            '  CreateDirectory "$SMPROGRAMS\\${APP_NAME}"',
-            f'  CreateShortCut "$SMPROGRAMS\\${{APP_NAME}}\\{name}.lnk" "{target}"',
-        ]
-        if add_uninstaller_link:
-            inner.append('  CreateShortCut "$SMPROGRAMS\\${APP_NAME}\\Uninstall.lnk" "$INSTDIR\\Uninstall.exe"')
-        lines.extend([
-            f"  ; Start menu shortcut ({name})",
-            f'  StrCmp $CREATE_SC_{i} "1" SC_Create_{i}',
-            f'  Goto SC_Skip_{i}',
-            f'SC_Create_{i}:',
-            *inner,
-            f'SC_Skip_{i}:',
-            "",
-        ])
+    if create_dir:
+        lines.append(create_dir)
+    lines.append(create_line)
+    if add_uninstaller_link and sc.sc_type == "startmenu":
+        lines.append(f'  CreateShortCut "{base_dir}\\Uninstall.lnk" "$INSTDIR\\Uninstall.exe"')
+    if sc.config.optional:
+        lines.append(f'SC_Skip_{i}:')
+    lines.append("")
 
 
 def _emit_shortcuts(ctx: BuildContext, lines: List[str]) -> None:
@@ -560,6 +601,27 @@ def _emit_shortcuts(ctx: BuildContext, lines: List[str]) -> None:
         # Add Uninstall.lnk only for global start menu shortcuts
         _emit_single_shortcut(ctx, lines, sc,
                               add_uninstaller_link=(sc.sc_type == "startmenu"))
+
+
+def _emit_shortcut_removes(ctx: BuildContext, lines: List[str]) -> None:
+    all_sc = collect_all_shortcuts(ctx)
+    if not all_sc:
+        return
+    lines.append("  ; Remove shortcuts")
+    remove_dirs = set()
+    remove_uninstall = set()
+    for sc in all_sc:
+        link_path = _escape_nsis(_shortcut_link_path(ctx, sc))
+        lines.append(f'  Delete "{link_path}"')
+        if sc.sc_type == "startmenu" and sc.section == "global":
+            base_dir = _escape_nsis(_shortcut_base_dir(ctx, sc))
+            remove_uninstall.add(base_dir)
+            remove_dirs.add(base_dir)
+    for base_dir in sorted(remove_uninstall):
+        lines.append(f'  Delete "{base_dir}\\Uninstall.lnk"')
+    for base_dir in sorted(remove_dirs):
+        lines.append(f'  RMDir "{base_dir}"')
+    lines.append("")
 
 
 def _emit_file_associations(ctx: BuildContext, lines: List[str]) -> None:
@@ -694,7 +756,6 @@ def _emit_env_var_writes_for(ctx: BuildContext, lines: List[str],
 
 
 def _emit_shortcuts_for(ctx: BuildContext, lines: List[str],
-                         desktop_sc, start_menu_sc,
                          section_id: str) -> None:
     """Emit shortcut creation for a specific package section.
 
