@@ -188,6 +188,7 @@ app:
   name: "MyApp"                    # 必须 / required
   version: "1.0.0"                 # 版本号
   publisher: "My Company"          # 发布者
+  branding_text: "Powered by..."   # 品牌文本（可选，默认使用 publisher）
   description: "App description"   # 描述
   install_icon: "app.ico"          # 安装器图标
   uninstall_icon: "uninstall.ico"  # 卸载器图标（默认回退到 install_icon）

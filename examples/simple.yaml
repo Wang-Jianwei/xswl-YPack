@@ -4,6 +4,7 @@ app:
   name: "SimpleApp"
   version: "1.0.0"
   publisher: "Example Publisher"
+  branding_text: "Powered by Example Publisher"
   description: "A simple demonstration application"
 
 install:

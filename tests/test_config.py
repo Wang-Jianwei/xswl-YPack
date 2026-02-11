@@ -38,6 +38,19 @@ class TestAppInfo:
         app = AppInfo.from_dict({"name": "A", "version": "1.0", "install_icon": "x.ico"})
         assert app.uninstall_icon == "x.ico"
 
+    def test_branding_text_explicit(self):
+        app = AppInfo.from_dict({
+            "name": "A",
+            "version": "1.0",
+            "publisher": "Publisher",
+            "branding_text": "Custom Branding"
+        })
+        assert app.branding_text == "Custom Branding"
+
+    def test_branding_text_none_by_default(self):
+        app = AppInfo.from_dict({"name": "A", "version": "1.0", "publisher": "P"})
+        assert app.branding_text is None
+
 
 # -----------------------------------------------------------------------
 # FileEntry

@@ -105,7 +105,7 @@ def generate_custom_includes(ctx: BuildContext) -> List[str]:
 
 
 def generate_general_settings(ctx: BuildContext) -> List[str]:
-    """Name, OutFile, InstallDir, RequestExecutionLevel, license."""
+    """Name, OutFile, InstallDir, RequestExecutionLevel, BrandingText, license."""
     cfg = ctx.config
     reg_view = ctx.effective_reg_view
     lines: List[str] = [
@@ -116,6 +116,17 @@ def generate_general_settings(ctx: BuildContext) -> List[str]:
         f'InstallDirRegKey HKLM "${{REG_KEY}}" "InstallPath"',
         'RequestExecutionLevel admin',
     ]
+
+    # BrandingText: defaults to publisher name if not explicitly set
+    branding_text = cfg.app.branding_text
+    if branding_text:
+        branding_text = ctx.resolve(branding_text)
+    else:
+        # Default: use publisher name
+        branding_text = cfg.app.publisher
+    if branding_text:
+        branding_text = branding_text.replace('"', '$\\"')
+        lines.append(f'BrandingText "{branding_text}"')
 
     # License data belongs to general settings (keeps settings grouped together)
     license_text = LangText.from_value(cfg.app.license)

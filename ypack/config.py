@@ -73,6 +73,7 @@ class AppInfo:
     name: str
     version: str
     publisher: str = ""
+    branding_text: Optional[str] = None
     description: LangText = field(default_factory=LangText)
     install_icon: str = ""
     uninstall_icon: str = ""
@@ -84,6 +85,7 @@ class AppInfo:
             name=data.get("name", ""),
             version=data.get("version", "1.0.0"),
             publisher=data.get("publisher", ""),
+            branding_text=data.get("branding_text"),
             description=LangText.from_value(data.get("description", "")),
             install_icon=data.get("install_icon", ""),
             uninstall_icon=data.get("uninstall_icon", data.get("install_icon", "")),

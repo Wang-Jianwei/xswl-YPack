@@ -4,6 +4,7 @@ app:
   name: "AdvancedApp"
   version: "2.0.1"
   publisher: "Advanced Software Inc."
+  branding_text: "Advanced Software - Professional Edition"
   description: "Advanced application with all features enabled"
   install_icon: "resources/app.ico"
   license: "LICENSE.txt"

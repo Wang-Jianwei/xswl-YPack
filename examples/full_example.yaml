@@ -11,19 +11,22 @@
 #   - 自定义变量：例如 `variables.SIGN_PASS`（用于签名密码），可以在 YAML 的 `variables` 部分定义，或通过构建环境/CI 注入。敏感信息不要硬编码在仓库中。
 # - 更多信息请参见 `docs/VARIABLES.md`、`ypack/variables.py` 和 `ypack/converters/convert_nsis.py` 中的实现。
 
+# 应用信息
 app:
   name: "MyApp"                                   # 应用名称（必需）
   version: "1.2.3"                                # 版本号（字符串）
   publisher: "Example Co."                        # 发布者/公司
-  description:                                 # 应用描述（支持多语言）
-      en: "I'm an Example application"       # 应用描述（用于安装界面等）
-      zh: "我是一个示例应用程序"
+  branding_text: "Example Co. - Quality Software" # 品牌文本（安装程序中显示的品牌信息）
+  description:                                    # 应用描述（用于安装界面等；支持多语言）
+      en: "I'm an Example application"            # 英文描述
+      zh: "我是一个示例应用程序"                    # 中文描述
   install_icon: "resources/icons/app.ico"         # 安装程序/快捷方式使用的图标路径（相对或绝对）
   uninstall_icon: "resources/icons/uninstall.ico" # 卸载程序使用的图标路径；若未提供，则默认使用 install_icon
-  license:
-    en: "resources/license_en.txt"   # 支持每种语言的许可证文件（转换器会在编译时使用 LicenseLangString 嵌入）
-    zh: "resources/license_zh.txt"   # 简体中文许可文件（可为相对或绝对路径）
+  license:                                        # 许可文件路径（支持多语言）    
+    en: "resources/license_en.txt"                # 英文许可文件（可为相对或绝对路径）
+    zh: "resources/license_zh.txt"                # 简体中文许可文件（可为相对或绝对路径）
 
+# 安装配置
 install:
   install_dir: "$PROGRAMFILES64\\${app.name}"     # 安装目标目录（支持内置变量（$VAR）和配置引用（${app.name}））
 
@@ -107,6 +110,7 @@ files:
     checksum_value: "abc123..."                         # 校验值（用于验证下载完整性）
     decompress: true                                    # 下载后是否自动解压（适用于压缩包）
 
+# 包/组件配置
 packages:                                       # 包/组件配置（支持嵌套 children）
   Core:                                         # Package 名称（作为组件名）
     description: "Core Functionality"           # 组件描述
@@ -138,6 +142,7 @@ packages:                                       # 包/组件配置（支持嵌�
       - "$INSTDIR\\tools\\configure.bat"        
       - "echo \"Extras installed\" >> \"$INSTDIR\\install.log\""
 
+# 代码签名配置
 signing:
   enabled: true                                   # 是否启用代码签名
   certificate: "certs/MyCodeSign.pfx"             # 签名证书（PFX）路径
@@ -147,6 +152,7 @@ signing:
   checksum_type: "sha256"                         # 可选：用于验证签名/证书的校验类型
   checksum_value: "..."                           # 可选：校验值
 
+# 自动更新配置
 update:
   enabled: true                                           # 是否启用自动更新支持
   update_url: "https://updates.example.com/metadata.json" # 检查更新的元数据 URL（返回 JSON，包含最新版本信息和下载链接）
@@ -157,11 +163,13 @@ update:
   registry_hive: "HKCU"                                   # 存储更新元数据所使用的注册表根
   registry_key: "Software\\${app.product}\\${app.name}"   # 更新元数据的注册表键（跨工具通用写法；使用配置引用 ${app.product} 和 ${app.name}；也可显式覆盖为具体字符串）
 
+# 日志配置
 logging:
   enabled: true                                    # 是否记录安装过程的日志
   path: "$INSTDIR\\install.log"                    # 日志路径（可为绝对或相对）
   level: "DEBUG"                                   # 日志级别：DEBUG, INFO, WARNING, ERROR
 
+# 语言配置
 languages:                                         # 支持的语言列表（ypack 跨工具语言标识；由转换器映射到具体工具，建议使用规范名）
   # 常见 ypack 语言标识（本仓库保留的核心集）：
   # English, SimplifiedChinese, TraditionalChinese, French, German, Spanish, Italian, Dutch,
