@@ -16,6 +16,35 @@ pip install -e ".[dev,validation]"
 
 ## Basic Usage
 
+### 使用 Web UI（可选）
+
+如果想要可视化编辑器与在线校验/保存功能，可以运行内置的 Web UI：
+
+```bash
+# 安装 Web UI 依赖
+pip install -e ".[web]"
+
+# 启动服务器（支持 --host --port --debug）
+xswl-ypack-web --host 127.0.0.1 --port 5000
+
+# 或使用 Windows 启动脚本
+.\scripts\start-web-ui.ps1
+```
+
+Web UI 暴露的常用 API（适用于自动化或前端集成）：
+
+- GET  /api/health
+- GET  /api/schema
+- GET  /api/schema/enums
+- POST /api/validate/yaml
+- POST /api/validate/config
+- POST /api/project/new
+- POST /api/project/load
+- POST /api/project/save
+- GET  /api/variables/builtin
+
+---
+
 ### 1. Generate a starter configuration
 
 ```bash
@@ -86,13 +115,15 @@ This generates `installer.nsi` in the same directory.
 ### 5. Preview without writing a file
 
 ```bash
+# short: -n
 xswl-ypack convert installer.yaml --dry-run
 ```
 
 ### 6. Build the installer (requires compiler)
 
 ```bash
-xswl-ypack convert installer.yaml --build
+# Default: uses `makensis` from PATH. 也可以通过 --makensis 指定路径：
+xswl-ypack convert installer.yaml --build --makensis "C:\Program Files\NSIS\makensis.exe"
 ```
 
 This generates the `.nsi` file and runs `makensis` to build `MyApp-1.0.0-Setup.exe`.
@@ -138,6 +169,19 @@ files:
   - build/MyGoApp.exe
   - config.yaml
 ```
+
+## Visualization
+
+项目包含一个命令行工具 `tools/yaml_to_mermaid.py`，用于把 `installer.yaml` 转换为 Mermaid 源或交互式 HTML：
+
+```bash
+# 输出 mermaid（.mmd）
+python -m tools.yaml_to_mermaid installer.yaml -o installer.mmd
+# 生成交互式 HTML
+python -m tools.yaml_to_mermaid installer.yaml --html installer.html
+```
+
+---
 
 ## Advanced Features
 

@@ -45,22 +45,35 @@ pip install -e ".[dev,validation]"
 
 ### 方式一：使用 Web UI（推荐新手）
 
-🎨 **可视化编辑器**：通过拖拽和表单编辑生成 YAML 配置
+🎨 **可视化编辑器**：通过拖拽和表单编辑生成 YAML 配置，并通过 REST API 进行程序化校验与保存。
 
 ```bash
 # 安装 Web UI 依赖
 pip install -e ".[web]"
 
-# 启动服务器
-xswl-ypack-web
+# 启动 Web UI（默认在 127.0.0.1:5000）
+# 支持：--host <host> --port <port> --debug
+xswl-ypack-web --host 127.0.0.1 --port 5000
 
-# 或使用启动脚本
+# 或使用启动脚本（Windows Powershell）
 .\scripts\start-web-ui.ps1
 ```
 
 浏览器访问 http://127.0.0.1:5000 即可使用可视化编辑器。
 
-详见 [Web UI 快速入门](docs/WEB_UI_QUICKSTART.md)
+常用 API 端点（开发 / 集成时有用）：
+
+- GET  /api/health              - Health check
+- GET  /api/schema              - JSON Schema
+- GET  /api/schema/enums        - Enum values
+- POST /api/validate/yaml       - Validate YAML
+- POST /api/validate/config     - Validate config dict
+- POST /api/project/new         - New project
+- POST /api/project/load        - Load from YAML
+- POST /api/project/save        - Save to YAML
+- GET  /api/variables/builtin   - Built-in variables
+
+> 提示：Web UI 由 `ypack_web.server:create_app` 提供，静态前端位于 `ypack_web/static/index.html`。有关 UI 使用详情请参阅 [docs/WEB_UI_QUICKSTART.md](docs/WEB_UI_QUICKSTART.md)。
 
 ### 方式二：使用命令行（推荐熟手）
 
@@ -109,7 +122,10 @@ xswl-ypack convert installer.yaml -f nsis
 xswl-ypack convert installer.yaml -o dist/installer.nsi
 
 # 预览到标准输出（不写文件）
-xswl-ypack convert installer.yaml --dry-run
+xswl-ypack convert installer.yaml --dry-run  # short: -n
+
+# 构建时指定 makensis 路径（NSIS）
+xswl-ypack convert installer.yaml --build --makensis "C:\Program Files\NSIS\makensis.exe"
 
 > 注意：生成的安装脚本在写入磁盘时会以 **UTF-8 with BOM**（`utf-8-sig`）编码保存，以确保 NSIS 在处理包含 Unicode 字符的脚本时能够正确识别。
 ```
@@ -135,7 +151,7 @@ xswl-ypack --help              # 查看帮助
 xswl-ypack --version           # 版本号
 
 # 子命令
-xswl-ypack convert <yaml> [-o output] [-f nsis|wix|inno] [--installer-name NAME] [--dry-run] [--build] [-v]
+xswl-ypack convert <yaml> [-o output] [-f nsis|wix|inno] [--installer-name NAME] [-n|--dry-run] [--build] [--makensis PATH] [-v]
 xswl-ypack init [-o installer.yaml]
 xswl-ypack validate <yaml> [-v]
 
@@ -144,6 +160,24 @@ xswl-ypack installer.yaml -o out.nsi
 ```
 
 `-f / --format` 指定目标后端（默认 `nsis`）。当前已实现 NSIS；WIX 和 Inno Setup 后端即将推出。
+
+## 配置选项 / Configuration Reference
+
+---
+
+## 可视化 / 可视化工具
+
+项目包含一个简单的命令行可视化工具 `tools/yaml_to_mermaid.py`，用于将 `installer.yaml` 转换为 Mermaid 图或交互式 HTML：
+
+```bash
+# 生成 Mermaid 源（输出到 stdout 或 -o file.mmd）
+python -m tools.yaml_to_mermaid installer.yaml -o installer.mmd
+
+# 也可以同时生成交互式 HTML
+python -m tools.yaml_to_mermaid installer.yaml --html installer.html
+```
+
+---
 
 ## 配置选项 / Configuration Reference
 
