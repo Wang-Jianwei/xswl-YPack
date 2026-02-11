@@ -9,6 +9,7 @@ from typing import List, Optional
 
 from .context import BuildContext
 from .nsis_languages import NsisLanguageMapping, get_nsis_mapping_or_fallback
+from .nsis_sections import collect_all_shortcuts
 from ..config import LanguageConfig, LangText
 from ..languages import (
     get_translated_string,
@@ -326,55 +327,52 @@ def generate_modern_ui(ctx: BuildContext) -> List[str]:
     else:
         lines.append("!insertmacro MUI_PAGE_DIRECTORY")
 
-    # Shortcut options page (if desktop or start-menu shortcuts are configured)
-    if cfg.install.desktop_shortcut or cfg.install.start_menu_shortcut:
+    # Shortcut options page — per-shortcut checkboxes
+    # Collect ALL shortcut definitions (global + per-package)
+    _all_shortcuts = collect_all_shortcuts(ctx)
+    if _all_shortcuts:
         lines.append('; Shortcut options page')
         lines.append('!include "nsDialogs.nsh"')
         lines.append('!include "WinMessages.nsh"')
-        lines.append('Var CREATE_DESKTOP_SHORTCUT')
-        lines.append('Var CREATE_START_MENU_SHORTCUT')
-        lines.append('Var _SHORTCUTS_DESKTOP_CTRL')
-        lines.append('Var _SHORTCUTS_START_CTRL')
+        # Declare per-shortcut variables
+        for sc in _all_shortcuts:
+            lines.append(f'Var CREATE_SC_{sc.idx}')
+        for sc in _all_shortcuts:
+            lines.append(f'Var _SC_CTRL_{sc.idx}')
         lines.append('')
 
-        # Create function: use localized strings when languages configured,
-        # otherwise fall back to literal English text (system language case).
-        if langs:
-            desktop_ref = '$(SHORTCUTS_DESKTOP)'
-            start_ref = '$(SHORTCUTS_STARTMENU)'
-        else:
-            desktop_ref = '"Create desktop shortcut"'
-            start_ref = '"Create start menu shortcut"'
+        # Build checkbox labels
+        sc_labels: List[str] = []
+        for sc in _all_shortcuts:
+            if langs:
+                sc_labels.append(f'$(SC_LABEL_{sc.idx})')
+            else:
+                if sc.sc_type == "desktop":
+                    sc_labels.append(f'"Create desktop shortcut: {sc.resolved_name}"')
+                else:
+                    sc_labels.append(f'"Create start menu shortcut: {sc.resolved_name}"')
 
-        lines.extend([
-            'Function ShortcutOptions_Create',
-            '  nsDialogs::Create 1018',
-            '  Pop $0',
-            '  StrCmp $0 error 0 +2',
-            '    Abort',
-            f'  ${{NSD_CreateCheckBox}} 10u 10u 100% 12u {desktop_ref}',
-            '  Pop $_SHORTCUTS_DESKTOP_CTRL',
-            '  ${NSD_SetState} $_SHORTCUTS_DESKTOP_CTRL 1',
-            f'  ${{NSD_CreateCheckBox}} 10u 28u 100% 12u {start_ref}',
-            '  Pop $_SHORTCUTS_START_CTRL',
-            '  ${NSD_SetState} $_SHORTCUTS_START_CTRL 1',
-            '  nsDialogs::Show',
-            'FunctionEnd',
-            '',
-            'Function ShortcutOptions_Leave',
-            '  ${NSD_GetState} $_SHORTCUTS_DESKTOP_CTRL $0',
-            '  StrCmp $0 1 0 +2',
-            '    StrCpy $CREATE_DESKTOP_SHORTCUT 1',
-            '  StrCpy $CREATE_DESKTOP_SHORTCUT 0',
-            '  ${NSD_GetState} $_SHORTCUTS_START_CTRL $0',
-            '  StrCmp $0 1 0 +2',
-            '    StrCpy $CREATE_START_MENU_SHORTCUT 1',
-            '  StrCpy $CREATE_START_MENU_SHORTCUT 0',
-            'FunctionEnd',
-            '',
-            'Page custom ShortcutOptions_Create ShortcutOptions_Leave',
-            '',
-        ])
+        lines.append('Function ShortcutOptions_Create')
+        lines.append('  nsDialogs::Create 1018')
+        lines.append('  Pop $0')
+        lines.append('  StrCmp $0 error 0 +2')
+        lines.append('    Abort')
+        y_pos = 10
+        for sc in _all_shortcuts:
+            lines.append(f'  ${{NSD_CreateCheckBox}} 10u {y_pos}u 100% 12u {sc_labels[sc.idx]}')
+            lines.append(f'  Pop $_SC_CTRL_{sc.idx}')
+            lines.append(f'  ${{NSD_SetState}} $_SC_CTRL_{sc.idx} 1')
+            y_pos += 18
+        lines.append('  nsDialogs::Show')
+        lines.append('FunctionEnd')
+        lines.append('')
+        lines.append('Function ShortcutOptions_Leave')
+        for sc in _all_shortcuts:
+            lines.append(f'  ${{NSD_GetState}} $_SC_CTRL_{sc.idx} $CREATE_SC_{sc.idx}')
+        lines.append('FunctionEnd')
+        lines.append('')
+        lines.append('Page custom ShortcutOptions_Create ShortcutOptions_Leave')
+        lines.append('')
 
     lines.extend([
         "!insertmacro MUI_PAGE_INSTFILES",
@@ -388,16 +386,23 @@ def generate_modern_ui(ctx: BuildContext) -> List[str]:
     # Localized strings for shortcut options page — emit after MUI_LANGUAGE so
     # ${LANG_*} constants are defined by MUI2.nsh and the language macros.
     # Only emit if languages are configured (otherwise suppress LangString usage).
-    if cfg.install.desktop_shortcut or cfg.install.start_menu_shortcut:
+    if _all_shortcuts:
         if langs:  # Only if languages are configured
             lines.append('; Shortcut options localized strings')
-            for lang_cfg in langs:
-                mapping = _resolve_nsis_mapping(lang_cfg)
-                lc = f'${{{mapping.lang_constant}}}'
-                desk = get_translated_string(lang_cfg.name, 'shortcuts_desktop', lang_cfg.strings)
-                smenu = get_translated_string(lang_cfg.name, 'shortcuts_startmenu', lang_cfg.strings)
-                lines.append(f'LangString SHORTCUTS_DESKTOP {lc} "{desk}"')
-                lines.append(f'LangString SHORTCUTS_STARTMENU {lc} "{smenu}"')
+            for sc in _all_shortcuts:
+                for lang_cfg in langs:
+                    mapping = _resolve_nsis_mapping(lang_cfg)
+                    lc = f'${{{mapping.lang_constant}}}'
+                    if sc.sc_type == "desktop":
+                        base = get_translated_string(lang_cfg.name, 'shortcuts_desktop', lang_cfg.strings)
+                    else:
+                        base = get_translated_string(lang_cfg.name, 'shortcuts_startmenu', lang_cfg.strings)
+                    label = f"{base}: {sc.resolved_name}"
+                    label_escaped = label.replace('"', '$\\"')
+                    lines.append(f'LangString SC_LABEL_{sc.idx} {lc} "{label_escaped}"')
+            lines.append('')
+        else:
+            lines.append('; Shortcut options localized strings')
             lines.append('')
 
     # Localized strings for language selection intro page (only shown when multiple languages configured)

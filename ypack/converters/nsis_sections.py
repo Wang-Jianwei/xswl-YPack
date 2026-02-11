@@ -12,10 +12,19 @@ from __future__ import annotations
 
 import os
 import re
-from typing import List, Set, Optional
+from typing import List, NamedTuple, Optional
 
 from .context import BuildContext
-from ..config import LangText
+from ..config import LangText, ShortcutConfig
+
+
+class ShortcutEntry(NamedTuple):
+    """Describes a single shortcut definition for per-shortcut checkbox support."""
+    idx: int            # Unique sequential index across all shortcuts
+    sc_type: str        # "desktop" or "startmenu"
+    config: ShortcutConfig      # ShortcutConfig instance
+    section: str        # "global" or "SEC_PKG_<n>"
+    resolved_name: str  # Resolved .lnk display name
 
 
 # -----------------------------------------------------------------------
@@ -46,7 +55,7 @@ def generate_installer_section(ctx: BuildContext) -> List[str]:
         "; ===========================================================================",
         '; Installer Section',
         "; ===========================================================================",
-        'Section "Install"',
+        'Section "-Install" SEC_INSTALL',
         "",
     ]
 
@@ -154,9 +163,6 @@ def generate_installer_section(ctx: BuildContext) -> List[str]:
     _emit_env_var_writes(ctx, lines)
 
     # --- Shortcuts ---
-    # Default to creating shortcuts; the installer custom page may override these vars
-    lines.append('  StrCpy $CREATE_DESKTOP_SHORTCUT "1"')
-    lines.append('  StrCpy $CREATE_START_MENU_SHORTCUT "1"')
     _emit_shortcuts(ctx, lines)
     if has_logging and (cfg.install.desktop_shortcut or cfg.install.start_menu_shortcut):
         lines.append('  !insertmacro LogWrite "Shortcuts created."')
@@ -310,6 +316,10 @@ def generate_uninstaller_section(ctx: BuildContext) -> List[str]:
     # Remove environment variables
     _emit_env_var_removes(ctx, lines)
 
+    # --- Per-package cleanup ---
+    if cfg.packages:
+        _emit_per_package_uninstall(ctx, lines)
+
     # --- Logging: end ---
     if has_logging:
         lines.append('  !insertmacro LogWrite "Uninstallation completed."')
@@ -326,6 +336,57 @@ def generate_uninstaller_section(ctx: BuildContext) -> List[str]:
 # -----------------------------------------------------------------------
 # Internal helpers
 # -----------------------------------------------------------------------
+
+def _emit_per_package_uninstall(ctx: BuildContext, lines: List[str]) -> None:
+    """Emit cleanup for per-package registry, env vars, shortcuts, file associations."""
+    for pkg in _flatten_packages(ctx.config.packages):
+        has_actions = (pkg.registry_entries or pkg.env_vars or
+                       pkg.desktop_shortcut or pkg.start_menu_shortcut or
+                       pkg.file_associations)
+        if not has_actions:
+            continue
+
+        lines.append(f"  ; Cleanup for package: {pkg.name}")
+
+        # Remove per-package shortcuts
+        if pkg.desktop_shortcut and pkg.desktop_shortcut.name:
+            name = ctx.resolve(pkg.desktop_shortcut.name)
+            lines.append(f'  Delete "$DESKTOP\\{name}.lnk"')
+        if pkg.start_menu_shortcut and pkg.start_menu_shortcut.name:
+            name = ctx.resolve(pkg.start_menu_shortcut.name)
+            lines.append(f'  Delete "$SMPROGRAMS\\${{APP_NAME}}\\{name}.lnk"')
+
+        # Remove per-package registry entries
+        for entry in pkg.registry_entries:
+            key = ctx.resolve(entry.key)
+            lines.append(f'  DeleteRegValue {entry.hive} "{key}" "{entry.name}"')
+
+        # Remove per-package file associations
+        for fa in pkg.file_associations:
+            hive, prefix = _fa_hive_prefix(fa)
+            lines.append(f'  DeleteRegKey {hive} "{prefix}{fa.extension}"')
+            if fa.prog_id:
+                lines.append(f'  DeleteRegKey {hive} "{prefix}{fa.prog_id}"')
+
+        # Remove per-package environment variables
+        for env in pkg.env_vars:
+            if not env.remove_on_uninstall:
+                continue
+            hive, key = _env_hive_key(env)
+            if env.append and env.name.upper() == "PATH":
+                env_value = ctx.resolve(env.value)
+                lines.extend([
+                    f"  ; Remove PATH entry: {env_value}",
+                    f'  ReadRegStr $0 {hive} "{key}" "{env.name}"',
+                    f'  StrCpy $1 "{env_value}"',
+                    "  Call un._RemovePathEntry",
+                    f'  WriteRegExpandStr {hive} "{key}" "{env.name}" "$0"',
+                    '  SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=500',
+                ])
+            else:
+                lines.append(f'  DeleteRegValue {hive} "{key}" "{env.name}"')
+        lines.append("")
+
 
 def _emit_registry_writes(ctx: BuildContext, lines: List[str]) -> None:
     """Emit WriteRegStr / WriteRegDWORD for custom registry entries.
@@ -416,43 +477,89 @@ def _emit_env_var_removes(ctx: BuildContext, lines: List[str]) -> None:
             lines.append(f'  DeleteRegValue {hive} "{key}" "{env.name}"')
 
 
-def _emit_shortcuts(ctx: BuildContext, lines: List[str]) -> None:
-    """Emit CreateShortCut for desktop and start menu."""
+def collect_all_shortcuts(ctx: BuildContext) -> List[ShortcutEntry]:
+    """Enumerate all shortcut definitions (global + per-package) with stable indices.
+
+    The index determines the NSIS variable name ($CREATE_SC_<index>) and the
+    checkbox control variable ($_SC_CTRL_<index>) used on the shortcut options page.
+    """
     cfg = ctx.config
+    entries: List[ShortcutEntry] = []
+    idx = 0
 
-    desktop_sc = cfg.install.desktop_shortcut
-    if desktop_sc and desktop_sc.target:
-        target = ctx.resolve(desktop_sc.target)
-        if not (target.startswith("$") or re.match(r"^[A-Za-z]:\\", target)):
-            target = f"$INSTDIR\\{target}"
-        # Use custom name if provided, otherwise use ${APP_NAME}
-        name = ctx.resolve(desktop_sc.name) if desktop_sc.name else "${APP_NAME}"
-        lines.append("  ; Desktop shortcut")
-        lines.append('  StrCmp $CREATE_DESKTOP_SHORTCUT "1" Shortcuts_CreateDesktop')
-        lines.append('  Goto Shortcuts_SkipDesktop')
-        lines.append('Shortcuts_CreateDesktop:')
-        lines.append(f'  CreateShortCut "$DESKTOP\\{name}.lnk" "{target}"')
-        lines.append('Shortcuts_SkipDesktop:')
-        lines.append("")
+    # Global install shortcuts
+    if cfg.install.desktop_shortcut and cfg.install.desktop_shortcut.target:
+        name = ctx.resolve(cfg.install.desktop_shortcut.name) if cfg.install.desktop_shortcut.name else "${APP_NAME}"
+        entries.append(ShortcutEntry(idx, "desktop", cfg.install.desktop_shortcut, "global", name))
+        idx += 1
+    if cfg.install.start_menu_shortcut and cfg.install.start_menu_shortcut.target:
+        name = ctx.resolve(cfg.install.start_menu_shortcut.name) if cfg.install.start_menu_shortcut.name else "${APP_NAME}"
+        entries.append(ShortcutEntry(idx, "startmenu", cfg.install.start_menu_shortcut, "global", name))
+        idx += 1
 
-    start_sc = cfg.install.start_menu_shortcut
-    if start_sc and start_sc.target:
-        target = ctx.resolve(start_sc.target)
-        if not (target.startswith("$") or re.match(r"^[A-Za-z]:\\", target)):
-            target = f"$INSTDIR\\{target}"
-        # Use custom name if provided, otherwise use ${APP_NAME}
-        name = ctx.resolve(start_sc.name) if start_sc.name else "${APP_NAME}"
+    # Per-package shortcuts (ordered by _flatten_packages)
+    flat = _flatten_packages(cfg.packages)
+    for pkg_idx, pkg in enumerate(flat):
+        sec_name = f"SEC_PKG_{pkg_idx}"
+        if pkg.desktop_shortcut and pkg.desktop_shortcut.target:
+            name = ctx.resolve(pkg.desktop_shortcut.name) if pkg.desktop_shortcut.name else "${APP_NAME}"
+            entries.append(ShortcutEntry(idx, "desktop", pkg.desktop_shortcut, sec_name, name))
+            idx += 1
+        if pkg.start_menu_shortcut and pkg.start_menu_shortcut.target:
+            name = ctx.resolve(pkg.start_menu_shortcut.name) if pkg.start_menu_shortcut.name else "${APP_NAME}"
+            entries.append(ShortcutEntry(idx, "startmenu", pkg.start_menu_shortcut, sec_name, name))
+            idx += 1
+
+    return entries
+
+
+def _emit_single_shortcut(ctx: BuildContext, lines: List[str],
+                          sc: ShortcutEntry,
+                          add_uninstaller_link: bool = False) -> None:
+    """Emit conditional CreateShortCut for a single shortcut, guarded by $CREATE_SC_<index>."""
+    i = sc.idx
+    target = ctx.resolve(sc.config.target)
+    if not (target.startswith("$") or re.match(r"^[A-Za-z]:\\", target)):
+        target = f"$INSTDIR\\{target}"
+    name = sc.resolved_name
+
+    if sc.sc_type == "desktop":
         lines.extend([
-            "  ; Start menu shortcuts",
-            '  StrCmp $CREATE_START_MENU_SHORTCUT "1" Shortcuts_CreateStartMenu',
-            '  Goto Shortcuts_SkipStartMenu',
-            'Shortcuts_CreateStartMenu:',
-            '  CreateDirectory "$SMPROGRAMS\\${APP_NAME}"',
-            f'  CreateShortCut "$SMPROGRAMS\\${{APP_NAME}}\\{name}.lnk" "{target}"',
-            '  CreateShortCut "$SMPROGRAMS\\${APP_NAME}\\Uninstall.lnk" "$INSTDIR\\Uninstall.exe"',
-            'Shortcuts_SkipStartMenu:',
+            f"  ; Desktop shortcut ({name})",
+            f'  StrCmp $CREATE_SC_{i} "1" SC_Create_{i}',
+            f'  Goto SC_Skip_{i}',
+            f'SC_Create_{i}:',
+            f'  CreateShortCut "$DESKTOP\\{name}.lnk" "{target}"',
+            f'SC_Skip_{i}:',
             "",
         ])
+    else:  # startmenu
+        inner = [
+            '  CreateDirectory "$SMPROGRAMS\\${APP_NAME}"',
+            f'  CreateShortCut "$SMPROGRAMS\\${{APP_NAME}}\\{name}.lnk" "{target}"',
+        ]
+        if add_uninstaller_link:
+            inner.append('  CreateShortCut "$SMPROGRAMS\\${APP_NAME}\\Uninstall.lnk" "$INSTDIR\\Uninstall.exe"')
+        lines.extend([
+            f"  ; Start menu shortcut ({name})",
+            f'  StrCmp $CREATE_SC_{i} "1" SC_Create_{i}',
+            f'  Goto SC_Skip_{i}',
+            f'SC_Create_{i}:',
+            *inner,
+            f'SC_Skip_{i}:',
+            "",
+        ])
+
+
+def _emit_shortcuts(ctx: BuildContext, lines: List[str]) -> None:
+    """Emit CreateShortCut for global desktop and start menu shortcuts."""
+    all_sc = collect_all_shortcuts(ctx)
+    for sc in all_sc:
+        if sc.section != "global":
+            continue
+        # Add Uninstall.lnk only for global start menu shortcuts
+        _emit_single_shortcut(ctx, lines, sc,
+                              add_uninstaller_link=(sc.sc_type == "startmenu"))
 
 
 def _emit_file_associations(ctx: BuildContext, lines: List[str]) -> None:
@@ -516,3 +623,109 @@ def _flatten_packages(packages) -> list:
         else:
             flat.append(pkg)
     return flat
+
+
+# -----------------------------------------------------------------------
+# Per-package helper variants (accept explicit data lists)
+# -----------------------------------------------------------------------
+
+def _emit_registry_writes_for(ctx: BuildContext, lines: List[str],
+                               entries: list) -> None:
+    """Emit WriteRegStr / WriteRegDWORD for a list of RegistryEntry objects."""
+    if not entries:
+        return
+    lines.append("  ; Registry entries")
+    current_view: Optional[str] = None
+    for entry in entries:
+        key = ctx.resolve(entry.key)
+        value = ctx.resolve(entry.value)
+        target_view = entry.view if entry.view in ("32", "64") else None
+        if target_view != current_view:
+            if current_view is not None:
+                lines.append("  SetRegView lastused")
+            if target_view is not None:
+                lines.append(f"  SetRegView {target_view}")
+            current_view = target_view
+        if entry.type == "dword":
+            lines.append(f'  WriteRegDWORD {entry.hive} "{key}" "{entry.name}" {value}')
+        elif entry.type == "expand":
+            lines.append(f'  WriteRegExpandStr {entry.hive} "{key}" "{entry.name}" "{value}"')
+        else:
+            lines.append(f'  WriteRegStr {entry.hive} "{key}" "{entry.name}" "{value}"')
+    if current_view is not None:
+        lines.append("  SetRegView lastused")
+    lines.append("")
+
+
+def _emit_env_var_writes_for(ctx: BuildContext, lines: List[str],
+                              env_vars: list) -> None:
+    """Emit environment variable writes for a list of EnvVarEntry objects."""
+    for env in env_vars:
+        env_value = ctx.resolve(env.value)
+        hive, key = _env_hive_key(env)
+        lines.append(f"  ; Environment variable: {env.name} ({env.scope})")
+
+        if env.append and env.name.upper() == "PATH":
+            lines.extend([
+                f'  ReadRegStr $0 {hive} "{key}" "{env.name}"',
+                f'  StrCpy $1 "{env_value}"',
+                "",
+                '  ; Check whether the entry already exists',
+                '  Push $0',
+                '  Push $1',
+                "  Call _StrContains",
+                '  StrCmp $R9 "1" _skip_path_append',
+                "",
+                '  ; Append entry',
+                '  StrCmp $0 "" 0 +2',
+                f'    StrCpy $0 "{env_value}"',
+                '  Goto +2',
+                f'    StrCpy $0 "$0;{env_value}"',
+                f'  WriteRegExpandStr {hive} "{key}" "{env.name}" "$0"',
+                "",
+                '  ; Broadcast WM_SETTINGCHANGE',
+                '  SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=500',
+                "",
+                "_skip_path_append:",
+            ])
+        else:
+            lines.append(f'  WriteRegStr {hive} "{key}" "{env.name}" "{env_value}"')
+        lines.append("")
+
+
+def _emit_shortcuts_for(ctx: BuildContext, lines: List[str],
+                         desktop_sc, start_menu_sc,
+                         section_id: str) -> None:
+    """Emit shortcut creation for a specific package section.
+
+    Uses ``collect_all_shortcuts`` to find the correct per-shortcut
+    variable ($CREATE_SC_<i>) for each shortcut in this package.
+    """
+    all_sc = collect_all_shortcuts(ctx)
+    for sc in all_sc:
+        if sc.section == section_id:
+            _emit_single_shortcut(ctx, lines, sc, add_uninstaller_link=False)
+
+
+def _emit_file_associations_for(ctx: BuildContext, lines: List[str],
+                                  fa_list: list, prefix_id: str) -> None:
+    """Emit WriteRegStr for a list of file associations."""
+    if not fa_list:
+        return
+    for idx, fa in enumerate(fa_list):
+        hive, prefix = _fa_hive_prefix(fa)
+        lines.append(f"  ; File association: {fa.extension} -> {fa.application}")
+        lines.append(f'  WriteRegStr {hive} "{prefix}{fa.extension}" "" "{fa.prog_id}"')
+        if fa.prog_id:
+            desc_text = LangText.from_value(fa.description)
+            desc_value = ctx.resolve(desc_text.text).replace('"', '$\\"') if desc_text.text else ""
+            lines.append(f'  WriteRegStr {hive} "{prefix}{fa.prog_id}" "" "{desc_value}"')
+        if fa.default_icon:
+            lines.append(f'  WriteRegStr {hive} "{prefix}{fa.prog_id}\\DefaultIcon" "" "{fa.default_icon}"')
+        verbs = fa.verbs or {}
+        if verbs:
+            for verb, cmd in verbs.items():
+                lines.append(f'  WriteRegStr {hive} "{prefix}{fa.prog_id}\\Shell\\{verb}\\Command" "" "{cmd}"')
+        elif fa.application:
+            lines.append(f'  WriteRegStr {hive} "{prefix}{fa.prog_id}\\Shell\\Open\\Command" "" "{fa.application} \\"%1\\""')
+        lines.append("")

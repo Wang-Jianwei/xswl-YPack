@@ -476,6 +476,13 @@ class PackageEntry:
     children: List[PackageEntry] = field(default_factory=list)
     post_install: List[str] = field(default_factory=list)
 
+    # Per-package install actions (only executed when this package is selected)
+    desktop_shortcut: Optional[ShortcutConfig] = None
+    start_menu_shortcut: Optional[ShortcutConfig] = None
+    registry_entries: List[RegistryEntry] = field(default_factory=list)
+    env_vars: List[EnvVarEntry] = field(default_factory=list)
+    file_associations: List[FileAssociation] = field(default_factory=list)
+
     @classmethod
     def from_dict(cls, name: str, data: Dict[str, Any]) -> PackageEntry:
         # Children (nested SectionGroup)
@@ -527,6 +534,21 @@ class PackageEntry:
                 canonical = resolve_language_name(str(key))
                 description.translations[canonical] = str(value) if value is not None else ""
 
+        # Per-package shortcuts
+        desktop_sc_data = data.get("desktop_shortcut")
+        desktop_sc = ShortcutConfig.from_dict(desktop_sc_data) if desktop_sc_data else None
+        start_menu_sc_data = data.get("start_menu_shortcut")
+        start_menu_sc = ShortcutConfig.from_dict(start_menu_sc_data) if start_menu_sc_data else None
+
+        # Per-package registry entries
+        reg_entries = [RegistryEntry.from_dict(r) for r in data.get("registry_entries", [])]
+
+        # Per-package environment variables
+        env_vars = [EnvVarEntry.from_dict(e) for e in data.get("env_vars", [])]
+
+        # Per-package file associations
+        file_assocs = [FileAssociation.from_dict(f) for f in data.get("file_associations", [])]
+
         return cls(
             name=name,
             sources=sources,
@@ -535,6 +557,11 @@ class PackageEntry:
             description=description,
             children=children,
             post_install=post_install,
+            desktop_shortcut=desktop_sc,
+            start_menu_shortcut=start_menu_sc,
+            registry_entries=reg_entries,
+            env_vars=env_vars,
+            file_associations=file_assocs,
         )
 
 

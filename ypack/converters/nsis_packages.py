@@ -13,6 +13,13 @@ from typing import List
 from .context import BuildContext
 from .nsis_languages import get_nsis_mapping
 from .nsis_sections import _normalize_path, _should_use_recursive, _flatten_packages
+from .nsis_sections import (
+    _emit_registry_writes_for,
+    _emit_env_var_writes_for,
+    _emit_file_associations_for,
+    _emit_shortcuts_for,
+    collect_all_shortcuts,
+)
 
 
 def generate_package_sections(ctx: BuildContext) -> List[str]:
@@ -74,6 +81,23 @@ def generate_package_sections(ctx: BuildContext) -> List[str]:
                         # Escape double quotes in ExecWait command
                         exec_cmd = cmd.replace('"', '$\\"')
                         lines.append(f'  ExecWait "{exec_cmd}"')
+
+                # Per-package registry entries
+                if pkg.registry_entries:
+                    lines.append("")
+                    _emit_registry_writes_for(ctx, lines, pkg.registry_entries)
+
+                # Per-package environment variables
+                if pkg.env_vars:
+                    _emit_env_var_writes_for(ctx, lines, pkg.env_vars)
+
+                # Per-package shortcuts
+                if pkg.desktop_shortcut or pkg.start_menu_shortcut:
+                    _emit_shortcuts_for(ctx, lines, pkg.desktop_shortcut, pkg.start_menu_shortcut, sec_name)
+
+                # Per-package file associations
+                if pkg.file_associations:
+                    _emit_file_associations_for(ctx, lines, pkg.file_associations, f"pkg_{idx_ref[0] - 1}")
 
                 if has_logging:
                     lines.append(f'  !insertmacro LogWrite "Component {pkg.name} done."')
@@ -385,6 +409,15 @@ def generate_oninit(ctx: BuildContext) -> List[str]:
     # ------------------------------------------------------------------
     lines.extend(_generate_existing_install_check(ctx))
 
+    # Default shortcut checkbox states (for silent installs where the
+    # ShortcutOptions page is skipped)
+    all_sc = collect_all_shortcuts(ctx)
+    if all_sc:
+        lines.append('  ; Default shortcut states (overridden by ShortcutOptions page)')
+        for sc in all_sc:
+            lines.append(f'  StrCpy $CREATE_SC_{sc.idx} "1"')
+        lines.append('')
+
     # Section flags for packages
     flat = _flatten_packages(cfg.packages)
     for idx, pkg in enumerate(flat):
@@ -392,7 +425,9 @@ def generate_oninit(ctx: BuildContext) -> List[str]:
         if pkg.optional and not pkg.default:
             lines.append(f"  SectionSetFlags ${{{sec}}} 0")
         elif not pkg.optional:
-            lines.append(f"  SectionSetFlags ${{{sec}}} ${{SF_SELECTED}}")
+            # When not optional, make it selected AND read-only (unselectable)
+            # SF_SELECTED | SF_RO = 1 | 16 = 17
+            lines.append(f"  SectionSetFlags ${{{sec}}} 17")
 
     lines.extend([
         "FunctionEnd",

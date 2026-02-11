@@ -30,18 +30,22 @@ app:
 install:
   install_dir: "$PROGRAMFILES64\\${app.name}"     # 安装目标目录（支持内置变量（$VAR）和配置引用（${app.name}））
 
-  desktop_shortcut:                               # 桌面快捷方式配置    
+  # 注意：desktop_shortcut、start_menu_shortcut、registry_entries、env_vars、file_associations
+  # 这些字段也可以写在 packages 中的各个组件下，这样只有该组件被选中安装时，对应操作才会执行。
+  # 写在 install 段的是全局配置，始终会执行。推荐将与特定组件相关的操作写在 packages 中。
+
+  desktop_shortcut:                               # 桌面快捷方式配置（全局，始终执行；也可写在 packages 下按组件执行）
     name: "${app.name}"                           # 桌面快捷方式名称（可选，默认使用应用名）
     target: "$INSTDIR\\bin\\MyApp.exe"            # 桌面快捷方式目标（可选）
 
-  start_menu_shortcut:                            # 开始菜单快捷方式配置
+  start_menu_shortcut:                            # 开始菜单快捷方式配置（全局，始终执行；也可写在 packages 下按组件执行）
     name: "${app.name}"                           # 开始菜单快捷方式名称（可选，默认使用应用名）
     target: "$INSTDIR\\bin\\MyApp.exe"            # 开始菜单快捷方式目标（可选）
 
   registry_key: "Software\\${app.publisher}\\${app.name}" # 注册表键路径（用于存储安装信息等）
   registry_view: "auto"                                   # 注册表视图：auto | 32 | 64（默认 auto，根据系统自动选择）
 
-  registry_entries:                                   # 注册表写入项（安装/卸载使用）
+  registry_entries:                                   # 注册表写入项（全局；也可写在 packages 下按组件执行）
     - hive: "HKLM"                                    # 注册表根：HKLM（系统范围）或 HKCU（用户范围）
       key: "Software\\${app.publisher}\\${app.name}"  # 注册表键路径
       name: "InstallPath"                             # 值名
@@ -49,14 +53,14 @@ install:
       type: "string"                                  # 类型："string" | "expand" | "dword"
       view: "auto"                                    # 视图："auto" | "32" | "64"
 
-  env_vars:                                        # 环境变量配置
+  env_vars:                                        # 环境变量配置（全局；也可写在 packages 下按组件执行）
     - name: "MYAPP_HOME"                           # 变量名
       value: "$INSTDIR"                            # 值（可包含变量）
       scope: "system"                              # 'system' 写入 HKLM，'user' 写入 HKCU
       remove_on_uninstall: true                    # 卸载时是否移除
       append: false                                # 是否以追加方式处理（例如 PATH）
 
-  file_associations:                                    # 文件关联配置（多个）
+  file_associations:                                    # 文件关联配置（全局；也可写在 packages 下按组件执行）
     - extension: ".my"                                  # 扩展名（含点）
       prog_id: "${app.publisher}.${app.name}"           # ProgID
       description: "MyApp file"                         # 描述
@@ -123,6 +127,31 @@ packages:                                       # 包/组件配置（支持嵌�
           - "libs/libA.dll"                     # 单个文件  
           - "libs/libB/**/*"                    # 递归复制子目录  
         destination: "$INSTDIR\\libs"           # 目标路径
+
+    # Per-package install actions（仅在该组件被选中安装时执行）
+    desktop_shortcut:                           # 桌面快捷方式（仅 Core 安装时创建）
+      name: "${app.name}"
+      target: "$INSTDIR\\bin\\MyApp.exe"
+    start_menu_shortcut:                        # 开始菜单快捷方式（仅 Core 安装时创建）
+      name: "${app.name}"
+      target: "$INSTDIR\\bin\\MyApp.exe"
+    registry_entries:                           # 注册表项（仅 Core 安装时写入）
+      - hive: "HKLM"
+        key: "Software\\${app.publisher}\\${app.name}"
+        name: "InstallPath"
+        value: "$INSTDIR"
+        type: "string"
+    file_associations:                          # 文件关联（仅 Core 安装时注册）
+      - extension: ".my"
+        prog_id: "${app.publisher}.${app.name}"
+        description: "MyApp file"
+        application: "$INSTDIR\\bin\\MyApp.exe \"%1\""
+        default_icon: "$INSTDIR\\icons\\myfile.ico"
+        verbs:
+          open: "$INSTDIR\\bin\\MyApp.exe \"%1\""
+          edit: "$INSTDIR\\bin\\MyApp.exe --edit \"%1\""
+        register_for_all_users: true
+
     children:                                   # 子组件（SectionGroup）
       Tools:                                    # 子组件名（此示例为 Tools 组件）   
         sources:                                # 安装文件源
@@ -131,13 +160,17 @@ packages:                                       # 包/组件配置（支持嵌�
         optional: true
         default: false                          # 默认不勾选
         description: "Optional Tools"
+        env_vars:                               # 环境变量（仅 Tools 安装时设置）
+          - name: "MYAPP_TOOLS"
+            value: "$INSTDIR\\tools"
+            scope: "system"
+            remove_on_uninstall: true
   Extras:                                       # 另一个组件示例
     description: "Extra Plugins and Add-ons"    # 组件描述
     optional: true                              # 是否为可选组件
     default: false                              # 默认不勾选
     source: "extras/"                           # 安装文件源
     destination: "$INSTDIR\\extras"             # 目标路径
-    recursive: true                             # 是否递归复制目录内容
     post_install:                               # 安装后要执行的命令（字符串或列表）
       - "$INSTDIR\\tools\\configure.bat"        
       - "echo \"Extras installed\" >> \"$INSTDIR\\install.log\""
@@ -170,16 +203,29 @@ logging:
   level: "DEBUG"                                   # 日志级别：DEBUG, INFO, WARNING, ERROR
 
 # 语言配置
+# 常见 ypack 语言标识（本仓库保留的核心集）：
+# English, SimplifiedChinese, TraditionalChinese, French, German, Spanish, Italian, Dutch,
+# Portuguese, BrazilianPortuguese, Japanese, Korean, Russian, Polish, Czech, Hungarian,
+# Turkish, Swedish, Norwegian, Danish, Ukrainian, Arabic, Thai, Vietnamese
+# 也支持别名（大小写不敏感）：
+#   chinese → SimplifiedChinese,
+#   zh → SimplifiedChinese
+#   en → English
+#   ja → Japanese
+#   ko → Korean
+#   fr → French
+#   de → German
+#   es → Spanish
+#   it → Italian
+#   pt → Portuguese
+#   brpt → BrazilianPortuguese
+#   ru → Russian
+# 更多语言和别名见 ypack/languages.py 中的定义。
 languages:                                         # 支持的语言列表（ypack 跨工具语言标识；由转换器映射到具体工具，建议使用规范名）
-  # 常见 ypack 语言标识（本仓库保留的核心集）：
-  # English, SimplifiedChinese, TraditionalChinese, French, German, Spanish, Italian, Dutch,
-  # Portuguese, BrazilianPortuguese, Japanese, Korean, Russian, Polish, Czech, Hungarian,
-  # Turkish, Swedish, Norwegian, Danish, Ukrainian, Arabic, Thai, Vietnamese
-  # 也支持别名（大小写不敏感）：chinese → SimplifiedChinese, zh → SimplifiedChinese,
-  # en → English, ja → Japanese, ko → Korean, fr → French, de → German ...
   - English
   - SimplifiedChinese
   - French
+  - ko
 
 variables:              # 自定义变量（可在此处定义供 YAML 解析引用，注意不能和内置变量冲突）
   SIGN_PASS: "******"   # 签名证书密码的占位示例；建议在 CI/环境中注入此值，不要直接写入仓库

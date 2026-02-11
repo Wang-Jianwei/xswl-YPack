@@ -9,6 +9,7 @@ This document describes the variable system used in YAML configurations and list
 - **Escape**: `$$` → `$` (use `$$INSTDIR` to get literal `$INSTDIR`).
 
 > Resolution order when generating scripts:
+>
 > 1. Expand `${...}` config references (including `${path.to.value}`).
 > 2. Convert `$NAME` built-in variables to the target tool's form (e.g. NSIS `$INSTDIR`, WIX `[INSTALLDIR]`).
 
@@ -87,6 +88,7 @@ Some installer converters define their own macros that appear in the generated s
 | `${REG_KEY}` | NSIS | Generated `.nsi` script (registry operations) | Defined by `convert_nsis.py` via `!define REG_KEY "Software\<app.name>"`. Do not use in YAML; instead use portable config references like `registry_key: "Software\\${app.name}"`. |
 
 > **Best practice**: In YAML configurations, use **cross-tool portable forms**:
+>
 > - For registry keys: use `"Software\\${app.name}"` or `"Software\\${app.publisher}\\${app.name}"` (config references)
 > - Never reference tool-specific macros like `${REG_KEY}`, `${APP_NAME}` in your YAML files
 

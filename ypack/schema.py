@@ -163,7 +163,43 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             },
         },
         "files": {"type": "array", "items": _FILE_ENTRY},
-        "packages": {"type": "object"},
+        "packages": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "object",
+                "properties": {
+                    "sources": {
+                        "oneOf": [
+                            _STRING,
+                            {"type": "array", "items": _FILE_ENTRY},
+                        ],
+                    },
+                    "source": {
+                        "oneOf": [
+                            _STRING,
+                            {"type": "array", "items": _FILE_ENTRY},
+                        ],
+                    },
+                    "destination": _STRING,
+                    "optional": _BOOL,
+                    "default": _BOOL,
+                    "description": _LANG_TEXT,
+                    "description_i18n": {"type": "object", "additionalProperties": _STRING},
+                    "post_install": {
+                        "oneOf": [
+                            _STRING,
+                            {"type": "array", "items": _STRING},
+                        ],
+                    },
+                    "children": {"type": "object"},
+                    "desktop_shortcut": _SHORTCUT,
+                    "start_menu_shortcut": _SHORTCUT,
+                    "registry_entries": {"type": "array", "items": _REGISTRY_ENTRY},
+                    "env_vars": {"type": "array", "items": _ENV_VAR},
+                    "file_associations": {"type": "array", "items": _FILE_ASSOCIATION},
+                },
+            },
+        },
         "signing": {
             "type": "object",
             "additionalProperties": False,

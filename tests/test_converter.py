@@ -44,7 +44,7 @@ class TestConverterBasics:
         script = YamlToNsisConverter(_simple_config()).convert()
         assert "!define APP_NAME" in script
         assert "Unicode true" in script
-        assert 'Section "Install"' in script
+        assert 'Section "-Install"' in script
         assert 'Section "Uninstall"' in script
         assert "MUI2.nsh" in script
 
@@ -129,15 +129,15 @@ class TestInstallerSection:
         # Ensure language is explicitly configured for predictable output
         cfg.languages = [LanguageConfig(name="English")]
         script = YamlToNsisConverter(cfg).convert()
-        assert 'Var CREATE_DESKTOP_SHORTCUT' in script
-        assert 'Var CREATE_START_MENU_SHORTCUT' in script
+        assert 'Var CREATE_SC_0' in script
+        assert 'Var CREATE_SC_1' in script
         assert 'Page custom ShortcutOptions_Create ShortcutOptions_Leave' in script
         assert 'Function ShortcutOptions_Create' in script
-        assert 'StrCpy $CREATE_DESKTOP_SHORTCUT "1"' in script
-        assert 'LangString SHORTCUTS_DESKTOP ${LANG_ENGLISH} "Create desktop shortcut"' in script
-        assert 'LangString SHORTCUTS_STARTMENU ${LANG_ENGLISH} "Create start menu shortcut"' in script
-        assert '$(SHORTCUTS_DESKTOP)' in script
-        assert '$(SHORTCUTS_STARTMENU)' in script
+        # Per-shortcut LangStrings include the shortcut name
+        assert 'LangString SC_LABEL_0 ${LANG_ENGLISH}' in script
+        assert 'LangString SC_LABEL_1 ${LANG_ENGLISH}' in script
+        assert '$(SC_LABEL_0)' in script
+        assert '$(SC_LABEL_1)' in script
 
     def test_shortcut_options_page_with_chinese_language(self):
         cfg = _simple_config(languages=["English", "SimplifiedChinese"])
@@ -145,8 +145,10 @@ class TestInstallerSection:
         cfg.install.desktop_shortcut = ShortcutConfig(name="", target="$INSTDIR\\TestApp.exe")
         cfg.install.start_menu_shortcut = ShortcutConfig(name="", target="$INSTDIR\\TestApp.exe")
         script = YamlToNsisConverter(cfg).convert()
-        assert 'LangString SHORTCUTS_DESKTOP ${LANG_SIMPCHINESE} "创建桌面快捷方式"' in script
-        assert 'LangString SHORTCUTS_STARTMENU ${LANG_SIMPCHINESE} "创建开始菜单快捷方式"' in script
+        assert 'LangString SC_LABEL_0 ${LANG_SIMPCHINESE}' in script
+        assert '创建桌面快捷方式' in script
+        assert 'LangString SC_LABEL_1 ${LANG_SIMPCHINESE}' in script
+        assert '创建开始菜单快捷方式' in script
 
     def test_remote_file(self):
         cfg = _simple_config()
@@ -374,7 +376,7 @@ class TestLanguages:
         from ypack.config import ShortcutConfig
         cfg.install.desktop_shortcut = ShortcutConfig(name="", target="$INSTDIR\\TestApp.exe")
         script2 = YamlToNsisConverter(cfg).convert()
-        assert '${NSD_CreateCheckBox} 10u 10u 100% 12u "Create desktop shortcut"' in script2
+        assert '"Create desktop shortcut:' in script2
 
 
 class TestLogging:
