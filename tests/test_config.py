@@ -43,13 +43,13 @@ class TestAppInfo:
             "name": "A",
             "version": "1.0",
             "publisher": "Publisher",
-            "branding_text": "Custom Branding"
+            "branding": "Custom Branding"
         })
-        assert app.branding_text == "Custom Branding"
+        assert app.branding == "Custom Branding"
 
     def test_branding_text_none_by_default(self):
         app = AppInfo.from_dict({"name": "A", "version": "1.0", "publisher": "P"})
-        assert app.branding_text is None
+        assert app.branding is None
 
 
 # -----------------------------------------------------------------------

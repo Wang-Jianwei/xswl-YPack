@@ -70,8 +70,8 @@ class TestConverterBasics:
         assert conv.resolve_variables("$PROGRAMFILES64\\${app.name}") == "$PROGRAMFILES64\\TestApp"
 
     def test_branding_text_explicit(self):
-        """Test that explicit branding_text appears in the NSIS script."""
-        cfg = _simple_config(app={"name": "T", "version": "1.0", "publisher": "Pub", "branding_text": "Custom Branding Text"})
+        """Test that explicit branding appears in the NSIS script."""
+        cfg = _simple_config(app={"name": "T", "version": "1.0", "publisher": "Pub", "branding": "Custom Branding Text"})
         script = YamlToNsisConverter(cfg).convert()
         assert 'BrandingText "Custom Branding Text"' in script
 
@@ -82,7 +82,7 @@ class TestConverterBasics:
         assert 'BrandingText "My Publisher Inc."' in script
 
     def test_branding_text_empty_no_publisher(self):
-        """Test that BrandingText is omitted when both branding_text and publisher are empty."""
+        """Test that BrandingText is omitted when both branding and publisher are empty."""
         cfg = _simple_config(app={"name": "T", "version": "1.0", "publisher": ""})
         script = YamlToNsisConverter(cfg).convert()
         # Should not have BrandingText line if publisher is empty

@@ -16,7 +16,7 @@ app:
   name: "MyApp"                                   # 应用名称（必需）
   version: "1.2.3"                                # 版本号（字符串）
   publisher: "Example Co."                        # 发布者/公司
-  branding_text: "Example Co. - Quality Software" # 品牌文本（安装程序中显示的品牌信息）
+  branding: "Example Co. - Quality Software"      # 品牌文本（安装程序中显示的品牌信息）
   description:                                    # 应用描述（用于安装界面等；支持多语言）
       en: "I'm an Example application"            # 英文描述
       zh: "我是一个示例应用程序"                    # 中文描述

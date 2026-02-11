@@ -8,15 +8,15 @@
 
 ### 1. 配置层 (`ypack/config.py`)
 
-- 在 `AppInfo` 数据类中添加了 `branding_text: Optional[str] = None` 字段
-- 修改了 `AppInfo.from_dict()` 方法，支持从 YAML 配置读取 `branding_text` 字段
+- 在 `AppInfo` 数据类中添加了 `branding: Optional[str] = None` 字段
+- 修改了 `AppInfo.from_dict()` 方法，支持从 YAML 配置读取 `branding` 字段
 
 ### 2. 转换层 (`ypack/converters/nsis_header.py`)
 
 - 修改了 `generate_general_settings()` 函数，添加 BrandingText 定义生成逻辑
-- **默认行为**：如果未指定 `branding_text`，自动使用 `publisher` 字段作为默认值
+- **默认行为**：如果未指定 `branding`，自动使用 `publisher` 字段作为默认值
 - **处理逻辑**：
-  - 如果设定了 `branding_text`，使用该值解析后的结果
+  - 如果设定了 `branding`，使用该值解析后的结果
   - 如果未设定但 `publisher` 存在，使用 `publisher`
   - 如果两者都不存在，不生成 BrandingText 指令
   - 自动转义双引号字符以保证 NSIS 脚本有效性
@@ -43,7 +43,7 @@ app:
   name: "MyApp"
   version: "1.0.0"
   publisher: "My Company Inc."
-  branding_text: "Powered by My Company Inc."
+  branding: "Powered by My Company Inc."
   description: "My awesome application"
 ```
 
@@ -55,7 +55,7 @@ app:
   version: "1.0.0"
   publisher: "My Company Inc."
   description: "My application"
-  # 不指定 branding_text，自动使用 publisher 值
+  # 不指定 branding，自动使用 publisher 值
 ```
 
 ### 示例 3：支持变量引用
@@ -65,14 +65,14 @@ app:
   name: "MyApp"
   version: "1.0.0"
   publisher: "My Company"
-  branding_text: "${app.publisher} - Professional Edition"
+  branding: "${app.publisher} - Professional Edition"
 ```
 
 ## 测试覆盖
 
 添加了 4 个新测试用例，涵盖以下场景：
 
-1. **test_branding_text_explicit** - 验证显式设置的 branding_text
+1. **test_branding_text_explicit** - 验证显式设置的 branding
 2. **test_branding_text_none_by_default** - 验证未设置时为 None
 3. **test_branding_text_explicit** - 验证 NSIS 脚本中的自定义 BrandingText
 4. **test_branding_text_default_to_publisher** - 验证默认使用发布者名称
@@ -84,8 +84,8 @@ app:
 
 已更新以下示例文件以展示新功能：
 
-- `examples/simple.yaml` - 添加了 branding_text 示例
-- `examples/complete.yaml` - 添加了 branding_text 示例
+- `examples/simple.yaml` - 添加了 branding 示例
+- `examples/complete.yaml` - 添加了 branding 示例
 - 生成的 NSIS 脚本中可以看到相应的 BrandingText 指令
 
 ## 文档
@@ -96,5 +96,5 @@ app:
 
 该功能完全向后兼容：
 
-- 不指定 `branding_text` 的现有配置继续工作，使用 publisher 作为默认值
+- 不指定 `branding` 的现有配置继续工作，使用 publisher 作为默认值
 - 所有既有测试继续通过

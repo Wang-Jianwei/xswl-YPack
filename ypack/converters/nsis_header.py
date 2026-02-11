@@ -119,15 +119,15 @@ def generate_general_settings(ctx: BuildContext) -> List[str]:
     ]
 
     # BrandingText: defaults to publisher name if not explicitly set
-    branding_text = cfg.app.branding_text
-    if branding_text:
-        branding_text = ctx.resolve(branding_text)
+    branding = cfg.app.branding
+    if branding:
+        branding = ctx.resolve(branding)
     else:
         # Default: use publisher name
-        branding_text = cfg.app.publisher
-    if branding_text:
-        branding_text = branding_text.replace('"', '$\\"')
-        lines.append(f'BrandingText "{branding_text}"')
+        branding = cfg.app.publisher
+    if branding:
+        branding = branding.replace('"', '$\\"')
+        lines.append(f'BrandingText "{branding}"')
 
     # License data belongs to general settings (keeps settings grouped together)
     license_text = LangText.from_value(cfg.app.license)

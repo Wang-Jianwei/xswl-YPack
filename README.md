@@ -59,7 +59,7 @@ xswl-ypack-web --host 127.0.0.1 --port 5000
 .\scripts\start-web-ui.ps1
 ```
 
-浏览器访问 http://127.0.0.1:5000 即可使用可视化编辑器。
+浏览器访问 <http://127.0.0.1:5000> 即可使用可视化编辑器。
 
 常用 API 端点（开发 / 集成时有用）：
 
@@ -188,7 +188,7 @@ app:
   name: "MyApp"                    # 必须 / required
   version: "1.0.0"                 # 版本号
   publisher: "My Company"          # 发布者
-  branding_text: "Powered by..."   # 品牌文本（可选，默认使用 publisher）
+  branding: "Powered by..."        # 品牌文本（可选，默认使用 publisher）
   description: "App description"   # 描述
   install_icon: "app.ico"          # 安装器图标
   uninstall_icon: "uninstall.ico"  # 卸载器图标（默认回退到 install_icon）
