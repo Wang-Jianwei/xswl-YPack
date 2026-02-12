@@ -202,6 +202,19 @@ class TestInstallerSection:
         script = YamlToNsisConverter(cfg).convert()
         assert 'Page custom ShortcutOptions_Create ShortcutOptions_Leave' not in script
 
+    def test_localized_system_prompts(self):
+        cfg = _simple_config(languages=["English", "SimplifiedChinese"])
+        cfg.install.system_requirements = SystemRequirements(min_windows_version="10.0", min_free_space_mb=500, min_ram_mb=1024)
+        # Ensure language strings are emitted
+        script = YamlToNsisConverter(cfg).convert()
+        assert 'LangString REQUIRES_WINDOWS ${LANG_ENGLISH}' in script
+        assert 'LangString NOT_ENOUGH_SPACE ${LANG_ENGLISH}' in script
+        assert 'LangString NOT_ENOUGH_MEMORY ${LANG_ENGLISH}' in script
+        # MessageBox usage uses the LangString variable when languages configured
+        assert 'MessageBox MB_OK|MB_ICONSTOP "$(REQUIRES_WINDOWS)"' in script
+        assert 'MessageBox MB_OK|MB_ICONSTOP "$(NOT_ENOUGH_SPACE)"' in script
+        assert 'MessageBox MB_OK|MB_ICONSTOP "$(NOT_ENOUGH_MEMORY)"' in script
+
     def test_remote_file(self):
         cfg = _simple_config()
         cfg.files = [FileEntry(source="https://x.com/f.bin", checksum_type="sha256", checksum_value="abc", decompress=True)]

@@ -16,6 +16,33 @@ from ..languages import (
 )
 
 
+def _escape_nsis_langstring(text: str) -> str:
+    """Escape and normalize text for use in NSIS LangString definitions.
+
+    Handles:
+    1. Quote escaping: " → $\"
+    2. Stray dollar markers normalization: $\r$ → \r, $\n$ → \n
+    3. Newline escaping: \r\n → $\r$\n, \r → $\r, \n → $\n
+
+    This ensures the text can be placed on a single line in a LangString statement
+    while preserving NSIS newline semantics.
+
+    Args:
+        text: Raw translated or resolved text that may contain quotes, newlines, or
+              previously-escaped markers.
+
+    Returns:
+        Text safe for insertion into a NSIS LangString value on a single line.
+    """
+    text = text.replace('"', '$\\"')
+    # Normalize any stray dollar markers around CR/LF (e.g. from prior processing)
+    text = text.replace('$\r$', '\r').replace('$\n$', '\n')
+    # Escape newlines for single-line NSIS LangString
+    text = text.replace('\r\n', '$\\r$\\n').replace('\r', '$\\r').replace('\n', '$\\n')
+    return text
+
+
+
 def generate_header(ctx: BuildContext) -> List[str]:
     """Top-of-file defines, Unicode flag, MUI icon defines."""
     cfg = ctx.config
@@ -367,7 +394,7 @@ def generate_modern_ui(ctx: BuildContext) -> List[str]:
                 text = f"Create quick launch shortcut: {sc.resolved_name}"
             else:
                 text = f"Create shortcut: {sc.resolved_name}"
-        return ctx.resolve(text).replace('"', '$\\"')
+        return ctx.resolve(text)
 
     if _optional_shortcuts:
         lines.append('; Shortcut options page')
@@ -377,7 +404,9 @@ def generate_modern_ui(ctx: BuildContext) -> List[str]:
             if langs:
                 sc_labels.append(f'$(SC_LABEL_{sc.idx})')
             else:
-                sc_labels.append(f'"{_default_label(sc, None)}"')
+                label = _default_label(sc, None)
+                label = _escape_nsis_langstring(label)
+                sc_labels.append(f'"{label}"')
 
         lines.append('Function ShortcutOptions_Create')
         lines.append('  nsDialogs::Create 1018')
@@ -422,6 +451,7 @@ def generate_modern_ui(ctx: BuildContext) -> List[str]:
                     mapping = _resolve_nsis_mapping(lang_cfg)
                     lc = f'${{{mapping.lang_constant}}}'
                     label_escaped = _default_label(sc, lang_cfg)
+                    label_escaped = _escape_nsis_langstring(label_escaped)
                     lines.append(f'LangString SC_LABEL_{sc.idx} {lc} "{label_escaped}"')
             lines.append('')
         else:
@@ -436,6 +466,10 @@ def generate_modern_ui(ctx: BuildContext) -> List[str]:
             lc = f'${{{mapping.lang_constant}}}'
             title = get_translated_string(lang_cfg.name, 'langpage_title', lang_cfg.strings)
             desc = get_translated_string(lang_cfg.name, 'langpage_desc', lang_cfg.strings)
+            title = ctx.resolve(title)
+            title = _escape_nsis_langstring(title)
+            desc = ctx.resolve(desc)
+            desc = _escape_nsis_langstring(desc)
             lines.append(f'LangString LANGPAGE_TITLE {lc} "{title}"')
             lines.append(f'LangString LANGPAGE_DESC {lc} "{desc}"')
         lines.append('')
@@ -457,7 +491,8 @@ def generate_modern_ui(ctx: BuildContext) -> List[str]:
                         lang_cfg.name,
                         f"file_associations[{idx}].description",
                     )
-                    text = ctx.resolve(text).replace('"', '$\\"')
+                    text = ctx.resolve(text)
+                    text = _escape_nsis_langstring(text)
                     lines.append(f'LangString FA_DESC_{idx} {lc} "{text}"')
             lines.append('')
 
@@ -469,7 +504,8 @@ def generate_modern_ui(ctx: BuildContext) -> List[str]:
             mapping = _resolve_nsis_mapping(lang_cfg)
             lc = f'${{{mapping.lang_constant}}}'
             text = desc_text.get_for_language(lang_cfg.name, "app.description")
-            text = ctx.resolve(text).replace('"', '$\\"')
+            text = ctx.resolve(text)
+            text = _escape_nsis_langstring(text)
             lines.append(f'LangString APP_DESCRIPTION {lc} "{text}"')
         lines.append('')
 
@@ -490,8 +526,84 @@ def generate_modern_ui(ctx: BuildContext) -> List[str]:
                 )
             else:
                 text = get_translated_string(lang_cfg.name, 'finish_run', lang_cfg.strings)
-            text = ctx.resolve(text).replace('"', '$\\"')
+            text = ctx.resolve(text)
+            text = _escape_nsis_langstring(text)
             lines.append(f'LangString FINISHPAGE_RUN_TEXT {lc} "{text}"')
         lines.append('')
 
+    # Localized strings for various prompts used by .onInit / existing-install logic
+    if langs:
+        lines.append('; System / existing-install localized strings')
+        for lang_cfg in langs:
+            mapping = _resolve_nsis_mapping(lang_cfg)
+            lc = f'${{{mapping.lang_constant}}}'
+            # Installer running
+            text = get_translated_string(lang_cfg.name, 'installer_running', lang_cfg.strings)
+            text = ctx.resolve(text)
+            text = _escape_nsis_langstring(text)
+            lines.append(f'LangString INSTALLER_RUNNING {lc} "{text}"')
+            # Signature failed
+            text = get_translated_string(lang_cfg.name, 'signature_failed', lang_cfg.strings)
+            text = ctx.resolve(text)
+            text = _escape_nsis_langstring(text)
+            lines.append(f'LangString SIGNATURE_FAILED {lc} "{text}"')
+            # Requires Windows: substitute {mv} if present
+            mv = ctx.config.install.system_requirements.min_windows_version if ctx.config.install.system_requirements else ""
+            text = get_translated_string(lang_cfg.name, 'requires_windows', lang_cfg.strings)
+            try:
+                text = text.format(mv=mv)
+            except Exception:
+                pass
+            text = ctx.resolve(text)
+            text = _escape_nsis_langstring(text)
+            lines.append(f'LangString REQUIRES_WINDOWS {lc} "{text}"')
+            # Disk & memory
+            mb_space = (ctx.config.install.system_requirements.min_free_space_mb
+                        if ctx.config.install.system_requirements else 0)
+            text = get_translated_string(lang_cfg.name, 'not_enough_space', lang_cfg.strings)
+            try:
+                text = text.format(mb=mb_space)
+            except Exception:
+                pass
+            text = ctx.resolve(text)
+            text = _escape_nsis_langstring(text)
+            lines.append(f'LangString NOT_ENOUGH_SPACE {lc} "{text}"')
+            mb_mem = (ctx.config.install.system_requirements.min_ram_mb
+                      if ctx.config.install.system_requirements else 0)
+            text = get_translated_string(lang_cfg.name, 'not_enough_memory', lang_cfg.strings)
+            try:
+                text = text.format(mb=mb_mem)
+            except Exception:
+                pass
+            text = ctx.resolve(text)
+            text = _escape_nsis_langstring(text)
+            lines.append(f'LangString NOT_ENOUGH_MEMORY {lc} "{text}"')
+            # Need admin
+            text = get_translated_string(lang_cfg.name, 'need_admin', lang_cfg.strings)
+            text = ctx.resolve(text)
+            text = _escape_nsis_langstring(text)
+            lines.append(f'LangString NEED_ADMIN {lc} "{text}"')
+            # Existing install prompts (use $R1/$R2 placeholders)
+            text = get_translated_string(lang_cfg.name, 'existing_install_prompt', lang_cfg.strings)
+            text = ctx.resolve(text)
+            text = _escape_nsis_langstring(text)
+            lines.append(f'LangString EXISTING_INSTALL_PROMPT {lc} "{text}"')
+            text = get_translated_string(lang_cfg.name, 'existing_install_prompt_no_ver', lang_cfg.strings)
+            text = ctx.resolve(text)
+            text = _escape_nsis_langstring(text)
+            lines.append(f'LangString EXISTING_INSTALL_PROMPT_NO_VER {lc} "{text}"')
+            text = get_translated_string(lang_cfg.name, 'existing_install_abort', lang_cfg.strings)
+            text = ctx.resolve(text)
+            text = _escape_nsis_langstring(text)
+            lines.append(f'LangString EXISTING_INSTALL_ABORT {lc} "{text}"')
+            text = get_translated_string(lang_cfg.name, 'existing_install_abort_no_ver', lang_cfg.strings)
+            text = ctx.resolve(text)
+            text = _escape_nsis_langstring(text)
+            lines.append(f'LangString EXISTING_INSTALL_ABORT_NO_VER {lc} "{text}"')
+            # Uninstall not finished prompt
+            text = get_translated_string(lang_cfg.name, 'uninstall_not_finished', lang_cfg.strings)
+            text = ctx.resolve(text)
+            text = _escape_nsis_langstring(text)
+            lines.append(f'LangString UNINSTALL_NOT_FINISHED {lc} "{text}"')
+        lines.append('')
     return lines

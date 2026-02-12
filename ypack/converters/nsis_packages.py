@@ -318,12 +318,13 @@ def generate_oninit(ctx: BuildContext) -> List[str]:
     # ------------------------------------------------------------------
     # Installer Mutex — prevent running two installers at the same time
     # ------------------------------------------------------------------
+    installer_running_text = '$(INSTALLER_RUNNING)' if cfg.languages else 'The installer is already running.'
     lines.extend([
         '  ; Prevent multiple installer instances',
         '  System::Call \'kernel32::CreateMutex(p 0, i 0, t "${APP_NAME}_InstallerMutex") p .r1 ?e\'',
         '  Pop $R0',
         '  StrCmp $R0 "0" +3 0',
-        '  MessageBox MB_OK|MB_ICONEXCLAMATION "The installer is already running."',
+        f'  MessageBox MB_OK|MB_ICONEXCLAMATION "{installer_running_text}"',
         '  Abort',
         '',
     ])
@@ -342,7 +343,10 @@ def generate_oninit(ctx: BuildContext) -> List[str]:
             '  nsExec::ExecToStack \'powershell -NoProfile -Command "& { $s = Get-AuthenticodeSignature -LiteralPath $env:__COMPAT_LAYER; if ($s.Status -ne [System.Management.Automation.SignatureStatus]::Valid) { exit 1 } }"\'',
             "  Pop $0",
             '  StrCmp $0 "0" _sig_ok',
-            '  MessageBox MB_OK|MB_ICONSTOP "Signature verification failed. Installation aborted."',
+        ])
+        sig_failed_text = '$(SIGNATURE_FAILED)' if cfg.languages else 'Signature verification failed. Installation aborted.'
+        lines.append(f'  MessageBox MB_OK|MB_ICONSTOP "{sig_failed_text}"')
+        lines.extend([
             "  Abort",
             "_sig_ok:",
             "",
@@ -358,7 +362,10 @@ def generate_oninit(ctx: BuildContext) -> List[str]:
                 f'  nsExec::ExecToStack \'powershell -NoProfile -Command "& {{ $v = (Get-CimInstance Win32_OperatingSystem).Version; if ([Version]$v -lt [Version]\'{mv}\') {{ exit 1 }} }}"\'',
                 "  Pop $0",
                 '  StrCmp $0 "0" +3 0',
-                f'  MessageBox MB_OK|MB_ICONSTOP "Requires Windows {mv} or higher."',
+            ])
+            req_win_text = '$(REQUIRES_WINDOWS)' if cfg.languages else f'Requires Windows {mv} or higher.'
+            lines.append(f'  MessageBox MB_OK|MB_ICONSTOP "{req_win_text}"')
+            lines.extend([
                 "  Abort",
                 "",
             ])
@@ -369,7 +376,10 @@ def generate_oninit(ctx: BuildContext) -> List[str]:
                 f'  nsExec::ExecToStack \'powershell -NoProfile -Command "& {{ $d = (Get-PSDrive ($env:SystemDrive[0])); if ($d.Free / 1MB -lt {mb}) {{ exit 1 }} }}"\'',
                 "  Pop $0",
                 '  StrCmp $0 "0" +3 0',
-                f'  MessageBox MB_OK|MB_ICONSTOP "Not enough free disk space. Require at least {mb} MB."',
+            ])
+            space_text = '$(NOT_ENOUGH_SPACE)' if cfg.languages else f'Not enough free disk space. Require at least {mb} MB.'
+            lines.append(f'  MessageBox MB_OK|MB_ICONSTOP "{space_text}"')
+            lines.extend([
                 "  Abort",
                 "",
             ])
@@ -380,7 +390,10 @@ def generate_oninit(ctx: BuildContext) -> List[str]:
                 f'  nsExec::ExecToStack \'powershell -NoProfile -Command "& {{ $m = (Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1MB; if ($m -lt {mb}) {{ exit 1 }} }}"\'',
                 "  Pop $0",
                 '  StrCmp $0 "0" +3 0',
-                f'  MessageBox MB_OK|MB_ICONSTOP "Not enough physical memory. Require at least {mb} MB."',
+            ])
+            mem_text = '$(NOT_ENOUGH_MEMORY)' if cfg.languages else f'Not enough physical memory. Require at least {mb} MB.'
+            lines.append(f'  MessageBox MB_OK|MB_ICONSTOP "{mem_text}"')
+            lines.extend([
                 "  Abort",
                 "",
             ])
@@ -390,7 +403,10 @@ def generate_oninit(ctx: BuildContext) -> List[str]:
                 "  UserInfo::GetAccountType",
                 "  Pop $0",
                 '  StrCmp $0 "Admin" +3 0',
-                '  MessageBox MB_OK|MB_ICONSTOP "This installer requires administrator privileges."',
+            ])
+            admin_text = '$(NEED_ADMIN)' if cfg.languages else 'This installer requires administrator privileges.'
+            lines.append(f'  MessageBox MB_OK|MB_ICONSTOP "{admin_text}"')
+            lines.extend([
                 "  Abort",
                 "",
             ])
@@ -456,6 +472,8 @@ def _generate_existing_install_check(ctx: BuildContext) -> List[str]:
 
     cfg = ctx.config
     has_logging = bool(cfg.logging and cfg.logging.enabled)
+    prompt_text = '$(UNINSTALL_NOT_FINISHED)' if cfg.languages else \
+        'The previous uninstaller did not finish.  Retry or cancel installation?'
 
     # When allow_multiple is True we intentionally DO NOT perform a
     # directory-specific existence check in .onInit (because $INSTDIR is
@@ -516,35 +534,33 @@ def _generate_existing_install_check(ctx: BuildContext) -> List[str]:
 
     if ei.mode == "prompt_uninstall":
         if ei.show_version_info:
-            lines.extend([
-                '  StrCmp $R2 "" _ei_prompt_no_ver 0',
-                '  MessageBox MB_YESNO|MB_ICONQUESTION "An existing installation (version $R2) was found at:$\\r$\\n$R1$\\r$\\n$\\r$\\nUninstall it first and continue?" IDYES _ei_do_uninstall IDNO _ei_cancel',
-                '  Goto _ei_prompt_done',
-                '_ei_prompt_no_ver:',
-                '  MessageBox MB_YESNO|MB_ICONQUESTION "An existing installation was found at:$\\r$\\n$R1$\\r$\\n$\\r$\\nUninstall it first and continue?" IDYES _ei_do_uninstall IDNO _ei_cancel',
-                '_ei_prompt_done:',
-            ])
+            prompt_ver = '$(EXISTING_INSTALL_PROMPT)' if cfg.languages else 'An existing installation (version $R2) was found at:$\\r$\\n$R1$\\r$\\n$\\r$\\nUninstall it first and continue?'
+            prompt_no_ver = '$(EXISTING_INSTALL_PROMPT_NO_VER)' if cfg.languages else 'An existing installation was found at:$\\r$\\n$R1$\\r$\\n$\\r$\\nUninstall it first and continue?'
+            lines.append('  StrCmp $R2 "" _ei_prompt_no_ver 0')
+            lines.append(f'  MessageBox MB_YESNO|MB_ICONQUESTION "{prompt_ver}" IDYES _ei_do_uninstall IDNO _ei_cancel')
+            lines.append('  Goto _ei_prompt_done')
+            lines.append('_ei_prompt_no_ver:')
+            lines.append(f'  MessageBox MB_YESNO|MB_ICONQUESTION "{prompt_no_ver}" IDYES _ei_do_uninstall IDNO _ei_cancel')
+            lines.append('_ei_prompt_done:')
         else:
-            lines.extend([
-                '  MessageBox MB_YESNO|MB_ICONQUESTION "An existing installation was found at:$\\r$\\n$R1$\\r$\\n$\\r$\\nUninstall it first and continue?" IDYES _ei_do_uninstall IDNO _ei_cancel',
-            ])
+            prompt_no_ver = '$(EXISTING_INSTALL_PROMPT_NO_VER)' if cfg.languages else 'An existing installation was found at:$\\r$\\n$R1$\\r$\\n$\\r$\\nUninstall it first and continue?'
+            lines.append(f'  MessageBox MB_YESNO|MB_ICONQUESTION "{prompt_no_ver}" IDYES _ei_do_uninstall IDNO _ei_cancel')
     elif ei.mode == "auto_uninstall":
         lines.append('  Goto _ei_do_uninstall')
     elif ei.mode == "abort":
         if ei.show_version_info:
-            lines.extend([
-                '  StrCmp $R2 "" _ei_abort_no_ver 0',
-                '  MessageBox MB_OK|MB_ICONSTOP "An existing installation (version $R2) was found at $R1. Installation aborted."',
-                '  Goto _ei_cancel',
-                '_ei_abort_no_ver:',
-                '  MessageBox MB_OK|MB_ICONSTOP "An existing installation was found at $R1. Installation aborted."',
-                '  Goto _ei_cancel',
-            ])
+            abort_ver = '$(EXISTING_INSTALL_ABORT)' if cfg.languages else 'An existing installation (version $R2) was found at $R1. Installation aborted.'
+            abort_no_ver = '$(EXISTING_INSTALL_ABORT_NO_VER)' if cfg.languages else 'An existing installation was found at $R1. Installation aborted.'
+            lines.append('  StrCmp $R2 "" _ei_abort_no_ver 0')
+            lines.append(f'  MessageBox MB_OK|MB_ICONSTOP "{abort_ver}"')
+            lines.append('  Goto _eid_cancel')
+            lines.append('_ei_abort_no_ver:')
+            lines.append(f'  MessageBox MB_OK|MB_ICONSTOP "{abort_no_ver}"')
+            lines.append('  Goto _eid_cancel')
         else:
-            lines.extend([
-                '  MessageBox MB_OK|MB_ICONSTOP "An existing installation was found at $R1. Installation aborted."',
-                '  Goto _ei_cancel',
-            ])
+            abort_no_ver = '$(EXISTING_INSTALL_ABORT_NO_VER)' if cfg.languages else 'An existing installation was found at $R1. Installation aborted.'
+            lines.append(f'  MessageBox MB_OK|MB_ICONSTOP "{abort_no_ver}"')
+            lines.append('  Goto _eid_cancel')
     elif ei.mode == "overwrite":
         lines.append('  Goto _ei_done  ; Overwrite mode: skip uninstall')
 
@@ -562,8 +578,20 @@ def _generate_existing_install_check(ctx: BuildContext) -> List[str]:
             lines.append('  !insertmacro LogWrite "Waiting for uninstaller to finish (no timeout)"')
         lines.extend([
             f'  ExecWait \'$R1\\Uninstall.exe {uninst_args}\' $R4',
-            '  StrCmp $R4 "0" _ei_done',
-            '  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "The previous uninstaller did not finish.  Retry or cancel installation?" IDRETRY _ei_do_uninstall',
+            '  ; Wait for uninstaller to finish (no timeout)',
+            '  StrCpy $R3 0',
+            '_ei_wait_loop:',
+            '  Sleep 500',
+            '  IntOp $R3 $R3 + 500',
+            '  IfFileExists "$R1\\Uninstall.exe" _ei_wait_loop _ei_wait_done',
+            '_ei_wait_done:',
+            '  ; Verify uninstaller is gone',
+            '  IfFileExists "$R1\\Uninstall.exe" 0 _ei_done',
+        ])
+        if has_logging:
+            lines.append('  !insertmacro LogWrite "Uninstaller finished."')
+        lines.extend([
+            f'  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "{prompt_text}" IDRETRY _ei_do_uninstall',
             '  ; Fall through to cancel',
         ])
     else:
@@ -577,11 +605,24 @@ def _generate_existing_install_check(ctx: BuildContext) -> List[str]:
         lines.extend([
             f'  ExecWait \'$R1\\Uninstall.exe {uninst_args}\' $R4',
             '  StrCmp $R4 "0" _ei_done',
+            f'  ; Wait for uninstaller to finish (up to {wait_ms}ms)',
+            '  StrCpy $R3 0',
+            '_ei_wait_loop:',
+            f'  ; Loop: if $R3 >= {wait_ms} goto _ei_wait_done, else continue waiting',
+            f'  IntCmp $R3 {wait_ms} _ei_wait_done _ei_wait_done _ei_wait_continue',
+            '_ei_wait_continue:',
+            '  Sleep 500',
+            '  IntOp $R3 $R3 + 500',
+            '  IfFileExists "$R1\\Uninstall.exe" _ei_wait_loop _ei_wait_done',
+            '_ei_wait_done:',
+            '  ; Verify uninstaller is gone',
+            '  IfFileExists "$R1\\Uninstall.exe" 0 _ei_done',
         ])
         if has_logging:
+            lines.append('  !insertmacro LogWrite "Uninstaller finished."')
             lines.append('  !insertmacro LogWrite "Uninstaller returned a non-zero exit code."')
         lines.extend([
-            '  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "The previous uninstaller did not finish.  Retry or cancel installation?" IDRETRY _ei_do_uninstall',
+            f'  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "{prompt_text}" IDRETRY _ei_do_uninstall',
             '  ; Fall through to cancel',
         ])
 
@@ -617,6 +658,8 @@ def generate_existing_install_helpers(ctx: BuildContext) -> List[str]:
 
     cfg = ctx.config
     has_logging = bool(cfg.logging and cfg.logging.enabled)
+    prompt_text = '$(UNINSTALL_NOT_FINISHED)' if cfg.languages else \
+        'The previous uninstaller did not finish.  Retry or cancel installation?'
 
     lines: List[str] = [
         "",
@@ -646,16 +689,33 @@ def generate_existing_install_helpers(ctx: BuildContext) -> List[str]:
     # Prompt / behavior
     if ei.mode == "prompt_uninstall":
         if ei.show_version_info:
-            lines.extend([
-                '  StrCmp $R2 "" _eid_prompt_no_ver 0',
-                '  MessageBox MB_YESNO|MB_ICONQUESTION "An existing installation (version $R2) was found at:$\\r$\\n$R1$\\r$\\n$\\r$\\nUninstall it first and continue?" IDYES _eid_do_uninstall IDNO _eid_cancel',
-                '  Goto _eid_prompt_done',
-                '_eid_prompt_no_ver:',
-                '  MessageBox MB_YESNO|MB_ICONQUESTION "An existing installation was found at:$\\r$\\n$R1$\\r$\\n$\\r$\\nUninstall it first and continue?" IDYES _eid_do_uninstall IDNO _eid_cancel',
-                '_eid_prompt_done:',
-            ])
+            prompt_ver = '$(EXISTING_INSTALL_PROMPT)' if cfg.languages else 'An existing installation (version $R2) was found at:$\\r$\\n$R1$\\r$\\n$\\r$\\nUninstall it first and continue?'
+            prompt_no_ver = '$(EXISTING_INSTALL_PROMPT_NO_VER)' if cfg.languages else 'An existing installation was found at:$\\r$\\n$R1$\\r$\\n$\\r$\\nUninstall it first and continue?'
+            lines.append('  StrCmp $R2 "" _eid_prompt_no_ver 0')
+            lines.append(f'  MessageBox MB_YESNO|MB_ICONQUESTION "{prompt_ver}" IDYES _eid_do_uninstall IDNO _eid_cancel')
+            lines.append('  Goto _eid_prompt_done')
+            lines.append('_eid_prompt_no_ver:')
+            lines.append(f'  MessageBox MB_YESNO|MB_ICONQUESTION "{prompt_no_ver}" IDYES _eid_do_uninstall IDNO _eid_cancel')
+            lines.append('_eid_prompt_done:')
         else:
-            lines.append('  MessageBox MB_YESNO|MB_ICONQUESTION "An existing installation was found at:$\\r$\\n$R1$\\r$\\n$\\r$\\nUninstall it first and continue?" IDYES _eid_do_uninstall IDNO _eid_cancel')
+            prompt_no_ver = '$(EXISTING_INSTALL_PROMPT_NO_VER)' if cfg.languages else 'An existing installation was found at:$\\r$\\n$R1$\\r$\\n$\\r$\\nUninstall it first and continue?'
+            lines.append(f'  MessageBox MB_YESNO|MB_ICONQUESTION "{prompt_no_ver}" IDYES _eid_do_uninstall IDNO _eid_cancel')
+    elif ei.mode == "auto_uninstall":
+        lines.append('  Goto _eid_do_uninstall')
+    elif ei.mode == "abort":
+        if ei.show_version_info:
+            abort_ver = '$(EXISTING_INSTALL_ABORT)' if cfg.languages else 'An existing installation (version $R2) was found at $R1. Installation aborted.'
+            abort_no_ver = '$(EXISTING_INSTALL_ABORT_NO_VER)' if cfg.languages else 'An existing installation was found at $R1. Installation aborted.'
+            lines.append('  StrCmp $R2 "" _eid_abort_no_ver 0')
+            lines.append(f'  MessageBox MB_OK|MB_ICONSTOP "{abort_ver}"')
+            lines.append('  Goto _eid_cancel')
+            lines.append('_eid_abort_no_ver:')
+            lines.append(f'  MessageBox MB_OK|MB_ICONSTOP "{abort_no_ver}"')
+            lines.append('  Goto _eid_cancel')
+        else:
+            abort_no_ver = '$(EXISTING_INSTALL_ABORT_NO_VER)' if cfg.languages else 'An existing installation was found at $R1. Installation aborted.'
+            lines.append(f'  MessageBox MB_OK|MB_ICONSTOP "{abort_no_ver}"')
+            lines.append('  Goto _eid_cancel')
     elif ei.mode == "auto_uninstall":
         lines.append('  Goto _eid_do_uninstall')
     elif ei.mode == "abort":
@@ -690,7 +750,7 @@ def generate_existing_install_helpers(ctx: BuildContext) -> List[str]:
         lines.extend([
             f'  ExecWait \'$R1\\Uninstall.exe {uninst_args}\' $R4',
             '  StrCmp $R4 "0" _eid_done',
-            '  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "The previous uninstaller did not finish.  Retry or cancel installation?" IDRETRY _eid_do_uninstall IDCANCEL _eid_cancel',
+            f'  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "{prompt_text}" IDRETRY _eid_do_uninstall IDCANCEL _eid_cancel',
         ])
     else:
         lines.extend([
@@ -706,7 +766,7 @@ def generate_existing_install_helpers(ctx: BuildContext) -> List[str]:
         if has_logging:
             lines.append('  !insertmacro LogWrite "Uninstaller returned a non-zero exit code."')
         lines.extend([
-            '  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "The previous uninstaller did not finish.  Retry or cancel installation?" IDRETRY _eid_do_uninstall IDCANCEL _eid_cancel',
+            f'  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "{prompt_text}" IDRETRY _eid_do_uninstall IDCANCEL _eid_cancel',
         ])
 
     lines.extend([
