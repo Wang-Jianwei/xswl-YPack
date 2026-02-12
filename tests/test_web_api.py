@@ -132,6 +132,41 @@ def test_convert():
     assert '!define' in script or 'Name "' in script or 'OutFile' in script
     print()
 
+
+def test_visual_persistence():
+    """Test that visual components are persisted into YAML via /project/save and restored by /project/load."""
+    print("Testing visual persistence: /api/project/save -> /api/project/load...")
+
+    config = {
+        "app": {"name": "MyApp", "version": "1.0.0", "publisher": "Test Co."},
+        "install": {"install_dir": "$PROGRAMFILES64\\MyApp"},
+        "files": ["MyApp.exe"],
+        "visual": {
+            "components": [
+                {"type": "file", "props": {"source": "MyApp.exe"}}
+            ]
+        }
+    }
+
+    # Save to YAML
+    response = requests.post(f"{BASE_URL}/api/project/save", json={"config": config})
+    assert response.status_code == 200
+    yaml_content = response.json().get('yaml_content', '')
+    assert 'visual' in yaml_content
+
+    # Load back
+    response = requests.post(f"{BASE_URL}/api/project/load", json={"yaml_content": yaml_content})
+    assert response.status_code == 200
+    data = response.json()
+    assert data.get('valid') is True
+    loaded_config = data.get('config', {})
+    assert 'visual' in loaded_config
+    comps = loaded_config.get('visual', {}).get('components', [])
+    assert len(comps) == 1
+    assert comps[0]['type'] == 'file'
+    assert comps[0]['props']['source'] == 'MyApp.exe'
+    print()
+
 if __name__ == "__main__":
     print("=" * 60)
     print("YPack Web UI API Test Suite")

@@ -43,6 +43,7 @@ dev = [
     "flask>=3.0",
     "flask-cors>=4.0",
     "requests>=2.25",
+    "playwright>=1.42",
 ]
 
 [tool.setuptools.packages.find]

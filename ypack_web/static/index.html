@@ -61,8 +61,32 @@
             border-right: 1px solid #DCDFE6;
             overflow-y: auto;
             background: #F5F7FA;
+            transition: width 160ms ease, opacity 160ms ease;
+            position: relative;
         }
-        
+
+        /* Collapsed left panel (icons-only) */
+        .left-panel.collapsed {
+            width: 56px;
+            overflow: visible;
+        }
+        .left-panel.collapsed .form-section { display: none; }
+        .left-panel .left-collapse-bar { display: none; }
+        .left-panel.collapsed .left-collapse-bar { display: flex; align-items: center; justify-content: center; height: 48px; }
+
+        /* Hidden right preview */
+        .right-panel.collapsed { width: 0; min-width: 0; padding: 0; opacity: 0; overflow: hidden; }
+
+        /* Compact variant */
+        .compact .left-panel { width: 260px; }
+        .compact .right-panel { width: 320px; }
+        .compact .form-section { margin: 10px; padding: 12px; }
+        .compact .form-section h3 { font-size: 14px; padding-bottom: 6px; }
+        .compact .file-item { padding: 6px 8px; }
+        .compact .file-list { border-radius: 3px; }
+        .compact .header { padding: 8px 12px; }
+        .compact .header h1 { font-size: 16px; }
+
         /* Center Panel - Editor */
         .center-panel {
             flex: 1;
@@ -84,6 +108,8 @@
         #yaml-editor {
             width: 100%;
             height: 100%;
+            min-height: 260px; /* ensure editor is visible even if parent flex calculations go wrong */
+            display: block;
         }
         
         /* Right Panel - Preview */
@@ -152,6 +178,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 8px;
         }
         
         .file-item:last-child {
@@ -161,6 +188,15 @@
         .file-item:hover {
             background: #F5F7FA;
         }
+
+        /* Drag handle and editing state */
+        .drag-handle { cursor: move; color: #909399; margin-right: 8px; }
+        .file-item.editing { background: #fff8e1; }
+        .inline-input { min-width: 120px; margin-right: 8px; }
+        .small-action { padding: 2px 6px; font-size: 12px; }
+        .search-row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+        .muted-note { font-size:12px; color:#909399; margin-left:8px; }
+        .validation-error { color:#f56c6c; font-size:12px; margin-left:8px; }
         
         /* Status Bar */
         .status-bar {
@@ -198,10 +234,14 @@
         .visual-editor { height: 100%; }
         .visual-comp:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.06); }
         .visual-comp { transition: box-shadow 0.12s ease; }
+        .visual-comp.invalid { border-color: #F56C6C; }
+        .visual-comp .visual-hint { font-size: 12px; color: #F56C6C; }
+        .visual-comp.invalid { border-color: #F56C6C; }
+        .visual-comp .visual-hint { font-size: 12px; color: #F56C6C; }
     </style>
 </head>
 <body>
-    <div id="app">
+    <div id="app" :class="{ compact: compactMode }">
         <!-- Header -->
         <div class="header">
             <h1>📦 YPack - Visual Installer Builder</h1>
@@ -209,13 +249,22 @@
                 <el-button type="primary" size="small" @click="newProject" plain>新建</el-button>
                 <el-button type="primary" size="small" @click="loadYamlFile">打开</el-button>
                 <el-button type="success" size="small" @click="downloadYaml">保存 YAML</el-button>
+                <el-button size="small" :type="compactMode ? 'warning' : 'info'" @click="toggleCompact" plain>
+                    <i :class="compactMode ? 'el-icon-full-screen' : 'el-icon-fa-compress'" style="margin-right:6px"></i>
+                    {{ compactMode ? '常规模式' : '紧凑模式' }}
+                </el-button>
+                <el-button size="small" :type="leftCollapsed ? 'primary' : 'default'" @click="toggleLeftCollapse" plain title="折叠/展开左侧面板">◀</el-button>
+                <el-button size="small" :type="rightCollapsed ? 'primary' : 'default'" @click="toggleRightCollapse" plain title="隐藏/显示 YAML 预览">▣</el-button>
             </div>
         </div>
         
         <!-- Main Layout -->
         <div class="main-layout">
             <!-- Left Panel: Properties Editor -->
-            <div class="left-panel">
+            <div class="left-panel" :class="{collapsed: leftCollapsed}">
+                <div class="left-collapse-bar" v-if="leftCollapsed" style="height:48px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid #e6e6e6;background:#fafafa;">
+                    <el-button size="mini" @click="toggleLeftCollapse">▶</el-button>
+                </div>
                 <!-- App Info Section -->
                 <div class="form-section">
                     <h3>📱 应用信息</h3>
@@ -267,6 +316,176 @@
                         + 添加文件
                     </el-button>
                 </div>
+
+                <!-- Registry Section -->
+                <div class="form-section">
+                    <h3>📝 注册表项</h3>
+
+                    <div class="search-row">
+                        <el-input size="small" v-model="registrySearch" clearable placeholder="搜索注册表（键/名/值）">
+                            <template #prefix>
+                                <i class="el-icon-search"></i>
+                            </template>
+                        </el-input>
+                        <el-button size="small" type="text" @click="registrySearch = ''">重置</el-button>
+                        <div class="muted-note">共 {{ config.install?.registry?.length || 0 }} 项</div>
+                    </div>
+
+                    <div class="file-list" v-if="filteredRegistry.length">
+                        <div class="file-item" v-for="entry in filteredRegistry" :key="entry.index" :class="{editing: editingRegistryIndex === entry.index}"
+                             draggable="true" @dragstart.prevent="onListDragStart('registry', entry.index, $event)" @dragover.prevent @drop.prevent="onListDrop('registry', entry.index, $event)">
+                            <div style="display:flex;align-items:center;flex:1;gap:8px">
+                                <i class="el-icon-rank drag-handle" aria-hidden="true"></i>
+
+                                <div v-if="editingRegistryIndex === entry.index" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                                    <el-select size="small" v-model="registryForm.hive" class="inline-input">
+                                        <el-option label="HKLM" value="HKLM"></el-option>
+                                        <el-option label="HKCU" value="HKCU"></el-option>
+                                        <el-option label="HKCR" value="HKCR"></el-option>
+                                        <el-option label="HKU" value="HKU"></el-option>
+                                    </el-select>
+                                    <el-input size="small" class="inline-input" v-model="registryForm.key" placeholder="键路径"></el-input>
+                                    <el-input size="small" class="inline-input" v-model="registryForm.name" placeholder="值名"></el-input>
+                                    <el-input size="small" class="inline-input" v-model="registryForm.value" placeholder="值"></el-input>
+                                    <el-select size="small" v-model="registryForm.type" class="inline-input">
+                                        <el-option label="REG_SZ" value="REG_SZ"></el-option>
+                                        <el-option label="REG_DWORD" value="REG_DWORD"></el-option>
+                                    </el-select>
+                                    <el-button size="mini" type="primary" class="small-action" @click="saveInlineRegistry(entry.index)">保存</el-button>
+                                    <el-button size="mini" class="small-action" @click="cancelInlineRegistry">取消</el-button>
+                                    <div v-if="(!registryForm.key || !registryForm.name)" class="validation-error">键路径 & 值名称为必填</div>
+                                </div>
+
+                                <div v-else style="flex:1;display:flex;align-items:center;justify-content:space-between">
+                                    <div style="display:flex;gap:8px;align-items:center">
+                                        <strong style="font-size:13px">{{ entry.item.hive }}\{{ entry.item.key }}\{{ entry.item.name }}</strong>
+                                        <span class="muted-note">{{ entry.item.value }}</span>
+                                    </div>
+                                    <div>
+                                        <el-button type="text" size="small" @click="startInlineRegistry(entry.index)">编辑</el-button>
+                                        <el-button type="danger" size="small" text @click="removeRegistry(entry.index)">删除</el-button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-else style="text-align: center; color: #909399; padding: 20px;">暂无注册表项</div>
+
+                    <div style="display:flex;gap:8px;margin-top:10px">
+                        <el-button type="primary" size="small" plain style="flex:1" @click="addRegistry">+ 添加注册表</el-button>
+                        <el-button size="small" @click="moveRegistryUp">▲</el-button>
+                        <el-button size="small" @click="moveRegistryDown">▼</el-button>
+                    </div>
+                </div>
+
+                <!-- Environment Variables Section -->
+                <div class="form-section">
+                    <h3>🌍 环境变量</h3>
+
+                    <div class="search-row">
+                        <el-input size="small" v-model="envSearch" clearable placeholder="搜索环境变量（名/值）">
+                            <template #prefix>
+                                <i class="el-icon-search"></i>
+                            </template>
+                        </el-input>
+                        <el-button size="small" type="text" @click="envSearch = ''">重置</el-button>
+                        <div class="muted-note">共 {{ config.install?.env_vars?.length || 0 }} 项</div>
+                    </div>
+
+                    <div class="file-list" v-if="filteredEnvVars.length">
+                        <div class="file-item" v-for="entry in filteredEnvVars" :key="entry.index" :class="{editing: editingEnvVarIndex === entry.index}"
+                             draggable="true" @dragstart.prevent="onListDragStart('env', entry.index, $event)" @dragover.prevent @drop.prevent="onListDrop('env', entry.index, $event)">
+                            <div style="display:flex;align-items:center;flex:1;gap:8px">
+                                <i class="el-icon-rank drag-handle" aria-hidden="true"></i>
+
+                                <div v-if="editingEnvVarIndex === entry.index" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                                    <el-input size="small" class="inline-input" v-model="envVarForm.name" placeholder="变量名"></el-input>
+                                    <el-input size="small" class="inline-input" v-model="envVarForm.value" placeholder="变量值"></el-input>
+                                    <el-select size="small" v-model="envVarForm.scope" class="inline-input">
+                                        <el-option label="user" value="user"></el-option>
+                                        <el-option label="system" value="system"></el-option>
+                                    </el-select>
+                                    <el-switch size="small" v-model="envVarForm.append"></el-switch>
+                                    <el-button size="mini" type="primary" class="small-action" @click="saveInlineEnvVar(entry.index)">保存</el-button>
+                                    <el-button size="mini" class="small-action" @click="cancelInlineEnvVar">取消</el-button>
+                                    <div v-if="!envVarForm.name || !envVarForm.value" class="validation-error">变量名和值为必填</div>
+                                </div>
+
+                                <div v-else style="flex:1;display:flex;align-items:center;justify-content:space-between">
+                                    <div style="display:flex;gap:8px;align-items:center">
+                                        <strong style="font-size:13px">{{ entry.item.name }}</strong>
+                                        <span class="muted-note">{{ entry.item.value }}</span>
+                                    </div>
+                                    <div>
+                                        <el-button type="text" size="small" @click="startInlineEnvVar(entry.index)">编辑</el-button>
+                                        <el-button type="danger" size="small" text @click="removeEnvVar(entry.index)">删除</el-button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-else style="text-align: center; color: #909399; padding: 20px;">暂无环境变量</div>
+
+                    <div style="display:flex;gap:8px;margin-top:10px">
+                        <el-button type="primary" size="small" plain style="flex:1" @click="addEnvVar">+ 添加环境变量</el-button>
+                        <el-button size="small" @click="moveEnvUp">▲</el-button>
+                        <el-button size="small" @click="moveEnvDown">▼</el-button>
+                    </div>
+                </div>
+
+                <!-- Shortcuts Section -->
+                <div class="form-section">
+                    <h3>🔗 快捷方式</h3>
+
+                    <div class="search-row">
+                        <el-input size="small" v-model="shortcutSearch" clearable placeholder="搜索快捷方式（名称/目标）">
+                            <template #prefix>
+                                <i class="el-icon-search"></i>
+                            </template>
+                        </el-input>
+                        <el-button size="small" type="text" @click="shortcutSearch = ''">重置</el-button>
+                        <div class="muted-note">共 {{ config.shortcuts?.length || 0 }} 项</div>
+                    </div>
+
+                    <div class="file-list" v-if="filteredShortcuts.length">
+                        <div class="file-item" v-for="entry in filteredShortcuts" :key="entry.index" :class="{editing: editingShortcutIndex === entry.index}"
+                             draggable="true" @dragstart.prevent="onListDragStart('shortcut', entry.index, $event)" @dragover.prevent @drop.prevent="onListDrop('shortcut', entry.index, $event)">
+                            <div style="display:flex;align-items:center;flex:1;gap:8px">
+                                <i class="el-icon-rank drag-handle" aria-hidden="true"></i>
+
+                                <div v-if="editingShortcutIndex === entry.index" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                                    <el-input size="small" class="inline-input" v-model="shortcutForm.name" placeholder="名称"></el-input>
+                                    <el-input size="small" class="inline-input" v-model="shortcutForm.target" placeholder="目标路径"></el-input>
+                                    <el-input size="small" class="inline-input" v-model="shortcutForm.args" placeholder="参数"></el-input>
+                                    <el-button size="mini" type="primary" class="small-action" @click="saveInlineShortcut(entry.index)">保存</el-button>
+                                    <el-button size="mini" class="small-action" @click="cancelInlineShortcut">取消</el-button>
+                                    <div v-if="!shortcutForm.name || !shortcutForm.target" class="validation-error">名称和目标为必填</div>
+                                </div>
+
+                                <div v-else style="flex:1;display:flex;align-items:center;justify-content:space-between">
+                                    <div style="display:flex;gap:8px;align-items:center">
+                                        <strong style="font-size:13px">{{ entry.item.name || entry.item.target }}</strong>
+                                        <span class="muted-note">{{ entry.item.target }}</span>
+                                    </div>
+                                    <div>
+                                        <el-button type="text" size="small" @click="startInlineShortcut(entry.index)">编辑</el-button>
+                                        <el-button type="danger" size="small" text @click="removeShortcut(entry.index)">删除</el-button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-else style="text-align: center; color: #909399; padding: 20px;">暂无快捷方式</div>
+
+                    <div style="display:flex;gap:8px;margin-top:10px">
+                        <el-button type="primary" size="small" plain style="flex:1" @click="addShortcut">+ 添加快捷方式</el-button>
+                        <el-button size="small" @click="moveShortcutUp">▲</el-button>
+                        <el-button size="small" @click="moveShortcutDown">▼</el-button>
+                    </div>
+                </div>
             </div>
             
             <!-- Center Panel: YAML Editor -->
@@ -284,20 +503,21 @@
                                 <!-- Palette -->
                                 <div style="width:200px;padding:10px;border-right:1px solid #eee;background:#fafafa">
                                     <h4 style="margin-bottom:10px">组件库</h4>
-                                    <div draggable="true" @dragstart="onDragStart($event,'file')" style="padding:8px;border:1px dashed #dcdfe6;border-radius:4px;margin-bottom:8px;cursor:grab">文件 (File)</div>
-                                    <div draggable="true" @dragstart="onDragStart($event,'shortcut')" style="padding:8px;border:1px dashed #dcdfe6;border-radius:4px;margin-bottom:8px;cursor:grab">快捷方式 (Shortcut)</div>
-                                    <div draggable="true" @dragstart="onDragStart($event,'folder')" style="padding:8px;border:1px dashed #dcdfe6;border-radius:4px;margin-bottom:8px;cursor:grab">文件夹 (Folder)</div>
-                                    <el-button type="primary" size="small" style="margin-top:12px;" @click="applyVisualToConfig">将可视化项应用到配置</el-button>
+                                    <div draggable="true" data-testid="visual-palette-file" @dragstart="onDragStart($event,'file')" style="padding:8px;border:1px dashed #dcdfe6;border-radius:4px;margin-bottom:8px;cursor:grab">文件 (File)</div>
+                                    <div draggable="true" data-testid="visual-palette-shortcut" @dragstart="onDragStart($event,'shortcut')" style="padding:8px;border:1px dashed #dcdfe6;border-radius:4px;margin-bottom:8px;cursor:grab">快捷方式 (Shortcut)</div>
+                                    <div draggable="true" data-testid="visual-palette-folder" @dragstart="onDragStart($event,'folder')" style="padding:8px;border:1px dashed #dcdfe6;border-radius:4px;margin-bottom:8px;cursor:grab">文件夹 (Folder)</div>
+                                    <el-button type="primary" size="small" style="margin-top:12px;" data-testid="visual-apply" @click="applyVisualToConfig">将可视化项应用到配置</el-button>
                                 </div>
 
                                 <!-- Canvas -->
-                                <div style="flex:1;padding:10px;position:relative" @dragover.prevent @drop="onDrop($event)">
+                                <div style="flex:1;padding:10px;position:relative" data-testid="visual-canvas" @dragover.prevent @drop="onDrop($event)">
                                     <h4 style="margin-top:0">画布</h4>
                                     <div v-if="visualComponents.length===0" style="color:#909399;padding:20px">将组件从左侧拖放到此处以创建可视化项</div>
-                                    <div v-for="(c, i) in visualComponents" :key="i" class="visual-comp" style="padding:8px;border:1px solid #EBEEF5;margin:6px;border-radius:4px;background:white;display:flex;justify-content:space-between;align-items:center">
+                                    <div v-for="(c, i) in visualComponents" :key="i" :class="['visual-comp', getVisualStatus(c).valid ? '' : 'invalid']" :data-testid="`visual-comp-${i}`" style="padding:8px;border:1px solid #EBEEF5;margin:6px;border-radius:4px;background:white;display:flex;justify-content:space-between;align-items:center">
                                         <div>
                                             <strong>{{ c.type }}</strong>
-                                            <div style="font-size:12px;color:#909399">{{ c.props.source || '未设置' }}</div>
+                                            <div style="font-size:12px;color:#909399">{{ c.props.source || c.props.name || '未设置' }}</div>
+                                            <div v-if="!getVisualStatus(c).valid" class="visual-hint">{{ getVisualStatus(c).message }}</div>
                                         </div>
                                         <div>
                                             <el-button type="text" size="mini" @click="editVisual(i)">编辑</el-button>
@@ -312,7 +532,7 @@
             </div>
             
             <!-- Right Panel: Preview -->
-            <div class="right-panel">
+            <div class="right-panel" :class="{collapsed: rightCollapsed}">
                 <div class="preview-header">
                     <h3 style="font-size: 14px; margin-bottom: 10px;">📄 YAML 预览</h3>
                     <el-button type="primary" size="small" @click="validateYaml" style="width: 100%;">
@@ -320,7 +540,7 @@
                     </el-button>
                 </div>
                 <div class="preview-content">
-                    <div class="yaml-preview">{{ yamlPreview }}</div>
+                    <div class="yaml-preview" data-testid="yaml-preview">{{ yamlPreview }}</div>
                 </div>
             </div>
         </div>
@@ -350,6 +570,143 @@
                 <el-button type="primary" @click="confirmAddFile">确定</el-button>
             </template>
         </el-dialog>
+
+        <!-- Visual Component Dialog -->
+        <el-dialog v-model="visualEditDialog" title="编辑可视化项" width="520px" data-testid="visual-edit-dialog">
+            <el-form label-width="90px">
+                <el-form-item label="类型">
+                    <el-select v-model="visualForm.type" disabled style="width: 100%;">
+                        <el-option label="文件" value="file"></el-option>
+                        <el-option label="文件夹" value="folder"></el-option>
+                        <el-option label="快捷方式" value="shortcut"></el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="源路径" v-if="visualForm.type !== 'shortcut'">
+                    <el-input v-model="visualForm.source" placeholder="bin/MyApp.exe" data-testid="visual-source"></el-input>
+                </el-form-item>
+                <el-form-item label="目标路径" v-if="visualForm.type !== 'shortcut'">
+                    <el-input v-model="visualForm.destination" placeholder="$INSTDIR" data-testid="visual-destination"></el-input>
+                </el-form-item>
+                <el-form-item label="递归" v-if="visualForm.type === 'folder'">
+                    <el-switch v-model="visualForm.recursive" data-testid="visual-recursive"></el-switch>
+                </el-form-item>
+                <el-form-item label="名称" v-if="visualForm.type === 'shortcut'">
+                    <el-input v-model="visualForm.name" placeholder="MyApp" data-testid="visual-name"></el-input>
+                </el-form-item>
+                <el-form-item label="目标" v-if="visualForm.type === 'shortcut'">
+                    <el-input v-model="visualForm.target" placeholder="$INSTDIR\\MyApp.exe" data-testid="visual-target"></el-input>
+                </el-form-item>
+                <el-form-item label="参数" v-if="visualForm.type === 'shortcut'">
+                    <el-input v-model="visualForm.args" placeholder="--help" data-testid="visual-args"></el-input>
+                </el-form-item>
+                <el-form-item label="图标" v-if="visualForm.type === 'shortcut'">
+                    <el-input v-model="visualForm.icon" placeholder="path/to/icon.ico" data-testid="visual-icon"></el-input>
+                </el-form-item>
+                <el-form-item label="说明">
+                    <el-input v-model="visualForm.description" type="textarea" :rows="2" data-testid="visual-description"></el-input>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="visualEditDialog = false">取消</el-button>
+                <el-button type="primary" data-testid="visual-save" @click="saveVisualEdit">保存</el-button>
+            </template>
+        </el-dialog>
+
+        <!-- Registry Entry Dialog -->
+        <el-dialog v-model="registryDialog" title="添加/编辑注册表项" width="500px">
+            <el-form :model="registryForm" label-width="100px">
+                <el-form-item label="根键">
+                    <el-select v-model="registryForm.hive" placeholder="选择根键">
+                        <el-option label="HKEY_LOCAL_MACHINE" value="HKLM"></el-option>
+                        <el-option label="HKEY_CURRENT_USER" value="HKCU"></el-option>
+                        <el-option label="HKEY_CLASSES_ROOT" value="HKCR"></el-option>
+                        <el-option label="HKEY_USERS" value="HKU"></el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="键路径">
+                    <el-input v-model="registryForm.key" placeholder="如: Software\\MyApp"></el-input>
+                </el-form-item>
+                <el-form-item label="值名称">
+                    <el-input v-model="registryForm.name" placeholder="如: InstallPath"></el-input>
+                </el-form-item>
+                <el-form-item label="值数据">
+                    <el-input v-model="registryForm.value" placeholder="值"></el-input>
+                </el-form-item>
+                <el-form-item label="类型">
+                    <el-select v-model="registryForm.type" placeholder="选择类型">
+                        <el-option label="字符串 (REG_SZ)" value="REG_SZ"></el-option>
+                        <el-option label="整数 (REG_DWORD)" value="REG_DWORD"></el-option>
+                        <el-option label="扩展字符串 (REG_EXPAND_SZ)" value="REG_EXPAND_SZ"></el-option>
+                        <el-option label="多行字符串 (REG_MULTI_SZ)" value="REG_MULTI_SZ"></el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="视图">
+                    <el-select v-model="registryForm.view" placeholder="选择视图">
+                        <el-option label="默认" value=""></el-option>
+                        <el-option label="64位" value="64"></el-option>
+                        <el-option label="32位" value="32"></el-option>
+                    </el-select>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="registryDialog = false">取消</el-button>
+                <el-button type="primary" @click="confirmRegistry">保存</el-button>
+            </template>
+        </el-dialog>
+
+        <!-- Environment Variable Dialog -->
+        <el-dialog v-model="envVarDialog" title="添加/编辑环境变量" width="500px">
+            <el-form :model="envVarForm" label-width="100px">
+                <el-form-item label="变量名">
+                    <el-input v-model="envVarForm.name" placeholder="如: PATH"></el-input>
+                </el-form-item>
+                <el-form-item label="变量值">
+                    <el-input v-model="envVarForm.value" placeholder="值"></el-input>
+                </el-form-item>
+                <el-form-item label="作用域">
+                    <el-select v-model="envVarForm.scope" placeholder="选择作用域">
+                        <el-option label="用户" value="user"></el-option>
+                        <el-option label="系统" value="system"></el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="追加模式">
+                    <el-switch v-model="envVarForm.append"></el-switch>
+                    <span style="margin-left: 10px; font-size: 12px; color: #999;">开启时追加到已有变量,关闭时覆盖</span>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="envVarDialog = false">取消</el-button>
+                <el-button type="primary" @click="confirmEnvVar">保存</el-button>
+            </template>
+        </el-dialog>
+
+        <!-- Shortcut Dialog -->
+        <el-dialog v-model="shortcutDialog" title="添加/编辑快捷方式" width="500px">
+            <el-form :model="shortcutForm" label-width="100px">
+                <el-form-item label="名称">
+                    <el-input v-model="shortcutForm.name" placeholder="快捷方式名称"></el-input>
+                </el-form-item>
+                <el-form-item label="目标路径">
+                    <el-input v-model="shortcutForm.target" placeholder="如: $INSTDIR\\app.exe"></el-input>
+                </el-form-item>
+                <el-form-item label="参数">
+                    <el-input v-model="shortcutForm.args" placeholder="启动参数(可选)"></el-input>
+                </el-form-item>
+                <el-form-item label="图标路径">
+                    <el-input v-model="shortcutForm.icon" placeholder="图标文件路径(可选)"></el-input>
+                </el-form-item>
+                <el-form-item label="描述">
+                    <el-input v-model="shortcutForm.description" placeholder="描述信息(可选)"></el-input>
+                </el-form-item>
+                <el-form-item label="工作目录">
+                    <el-input v-model="shortcutForm.working_dir" placeholder="工作目录(可选)"></el-input>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="shortcutDialog = false">取消</el-button>
+                <el-button type="primary" @click="confirmShortcut">保存</el-button>
+            </template>
+        </el-dialog>
     </div>
     
     <!-- Vue 3 -->
@@ -362,8 +719,19 @@
     <script src="https://unpkg.com/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
     
     <script>
-        const { createApp, ref, reactive, watch, onMounted } = Vue;
+        const { createApp, ref, reactive, watch, onMounted, computed } = Vue;
         const { ElMessage, ElMessageBox } = ElementPlus;
+        
+        // Accessibility: keyboard shortcut for compact toggle (Alt+K)
+        document.addEventListener('keydown', (e) => {
+            if (e.altKey && e.key.toLowerCase() === 'k') {
+                // will be handled inside Vue via compactMode binding
+                const appRoot = document.getElementById('app');
+                if (appRoot && appRoot.__vue_app__) {
+                    try { appRoot.__vue_app__._instance.ctx.toggleCompact(); } catch (err) {}
+                }
+            }
+        });
         
         const API_BASE = 'http://127.0.0.1:5000/api';
         
@@ -372,6 +740,15 @@
                 // State
                 const activeTab = ref('yaml');
                 const addFileDialog = ref(false);
+                const registryDialog = ref(false);
+                const envVarDialog = ref(false);
+                const shortcutDialog = ref(false);
+                const compactMode = ref(false);
+
+                // collapse state to enlarge center canvas
+                const leftCollapsed = ref(false);
+                const rightCollapsed = ref(false);
+                const autoCollapseOnVisual = ref(true);
                 
                 const config = reactive({
                     app: {
@@ -391,6 +768,62 @@
                 const newFile = reactive({
                     source: '',
                     destination: '$INSTDIR',
+                });
+                
+                const registryForm = reactive({
+                    hive: 'HKLM',
+                    key: '',
+                    name: '',
+                    value: '',
+                    type: 'REG_SZ',
+                    view: ''
+                });
+                
+                const envVarForm = reactive({
+                    name: '',
+                    value: '',
+                    scope: 'user',
+                    append: false
+                });
+                
+                const shortcutForm = reactive({
+                    name: '',
+                    target: '',
+                    args: '',
+                    icon: '',
+                    description: '',
+                    working_dir: ''
+                });
+                
+                let editingRegistryIndex = -1;
+                let editingEnvVarIndex = -1;
+                let editingShortcutIndex = -1;
+
+                // Search/filter inputs
+                const registrySearch = ref('');
+                const envSearch = ref('');
+                const shortcutSearch = ref('');
+
+                // Drag state for reordering
+                const dragState = reactive({ section: '', index: -1 });
+
+                // Filtered computed lists that preserve original index
+                const filteredRegistry = computed(() => {
+                    if (!config.install || !config.install.registry) return [];
+                    return config.install.registry.map((it, i) => ({ item: it, index: i }))
+                        .filter(({ item }) => !registrySearch.value || (`${item.hive} ${item.key} ${item.name} ${item.value}`).toLowerCase().includes(registrySearch.value.toLowerCase()));
+                });
+
+                const filteredEnvVars = computed(() => {
+                    if (!config.install || !config.install.env_vars) return [];
+                    return config.install.env_vars.map((it, i) => ({ item: it, index: i }))
+                        .filter(({ item }) => !envSearch.value || (`${item.name} ${item.value}`).toLowerCase().includes(envSearch.value.toLowerCase()));
+                });
+
+                const filteredShortcuts = computed(() => {
+                    if (!config.shortcuts) return [];
+                    return config.shortcuts.map((it, i) => ({ item: it, index: i }))
+                        .filter(({ item }) => !shortcutSearch.value || (`${item.name} ${item.target}`).toLowerCase().includes(shortcutSearch.value.toLowerCase()));
                 });
                 
                 const yamlPreview = ref('');
@@ -421,7 +854,11 @@
                             fontSize: 14,
                             tabSize: 2
                         });
-                        
+
+                        // Force an initial layout and add resize handler (defensive)
+                        try { editor.layout(); } catch (e) { /* ignore */ }
+                        window.addEventListener('resize', () => { try { if (editor && typeof editor.layout === 'function') editor.layout(); } catch (e) {} });
+
                         // Listen to editor changes
                         editor.onDidChangeModelContent(() => {
                             if (!isEditorChange) {
@@ -429,7 +866,7 @@
                                 loadFromYaml();
                             }
                         });
-                        
+
                         // Initial sync
                         syncToYaml();
                     });
@@ -438,6 +875,17 @@
                 // Sync config to YAML
                 async function syncToYaml() {
                     try {
+                        // Persist visual components into the config so they are saved to YAML
+                        try {
+                            config.visual = { components: visualComponents.map(c => ({ type: c.type, props: c.props })) };
+                        } catch (e) {
+                            // If reactive proxy prevents direct assignment, assign safely
+                            config.visual = Object.assign({}, { components: visualComponents.map(c => ({ type: c.type, props: c.props })) });
+                        }
+
+                        // Defensive: ensure editor layout after config changes that affect layout
+                        setTimeout(() => { try { if (editor && typeof editor.layout === 'function') editor.layout(); } catch (e) {} }, 50);
+
                         const response = await fetch(`${API_BASE}/project/save`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -461,6 +909,50 @@
 
                 // -------------------- 可视化 编辑器逻辑 --------------------
                 const visualComponents = reactive([]);
+                const visualEditDialog = ref(false);
+                const visualEditIndex = ref(-1);
+                const visualForm = reactive({
+                    type: 'file',
+                    source: '',
+                    destination: '$INSTDIR',
+                    recursive: false,
+                    name: '',
+                    target: '',
+                    args: '',
+                    icon: '',
+                    description: ''
+                });
+
+                function resetVisualForm(type) {
+                    visualForm.type = type || 'file';
+                    visualForm.source = '';
+                    visualForm.destination = '$INSTDIR';
+                    visualForm.recursive = false;
+                    visualForm.name = '';
+                    visualForm.target = '';
+                    visualForm.args = '';
+                    visualForm.icon = '';
+                    visualForm.description = '';
+                }
+
+                function getVisualStatus(c) {
+                    if (!c || !c.type) {
+                        return { valid: false, message: '缺少类型' };
+                    }
+                    if (c.type === 'shortcut') {
+                        if (!c.props || !c.props.name) {
+                            return { valid: false, message: '需要名称' };
+                        }
+                        if (!c.props.target) {
+                            return { valid: false, message: '需要目标' };
+                        }
+                    } else {
+                        if (!c.props || !c.props.source) {
+                            return { valid: false, message: '需要源路径' };
+                        }
+                    }
+                    return { valid: true, message: '' };
+                }
 
                 function onDragStart(e, type) {
                     e.dataTransfer.setData('text/plain', type);
@@ -468,42 +960,127 @@
 
                 function onDrop(e) {
                     const type = e.dataTransfer.getData('text/plain') || 'file';
-                    // Create a simple visual component (props can be edited later)
-                    visualComponents.push({ type: type, props: {} });
+                    let props = {};
+                    if (type === 'shortcut') {
+                        props = { name: '', target: '', args: '', icon: '', description: '' };
+                    } else {
+                        props = { source: '', destination: '$INSTDIR', recursive: type === 'folder', description: '' };
+                    }
+                    visualComponents.push({ type: type, props: props });
+                    openVisualEdit(visualComponents.length - 1);
                 }
 
                 function removeVisual(index) {
                     visualComponents.splice(index, 1);
                 }
 
-                function editVisual(index) {
+                function openVisualEdit(index) {
                     const c = visualComponents[index];
-                    ElMessageBox.prompt('请输入源路径（source）', `编辑 ${c.type}`, {
-                        confirmButtonText: '确定',
-                        cancelButtonText: '取消',
-                        inputValue: c.props.source || ''
-                    }).then(({ value }) => {
-                        c.props.source = value;
-                    }).catch(() => {});
+                    if (!c) return;
+                    resetVisualForm(c.type);
+                    if (c.props) {
+                        visualForm.source = c.props.source || '';
+                        visualForm.destination = c.props.destination || '$INSTDIR';
+                        visualForm.recursive = Boolean(c.props.recursive);
+                        visualForm.name = c.props.name || '';
+                        visualForm.target = c.props.target || '';
+                        visualForm.args = c.props.args || '';
+                        visualForm.icon = c.props.icon || '';
+                        visualForm.description = c.props.description || '';
+                    }
+                    visualEditIndex.value = index;
+                    visualEditDialog.value = true;
+                }
+
+                function editVisual(index) {
+                    openVisualEdit(index);
+                }
+
+                function saveVisualEdit() {
+                    const type = visualForm.type;
+                    if (type === 'shortcut') {
+                        if (!visualForm.name) {
+                            ElMessage.warning('请输入名称');
+                            return;
+                        }
+                        if (!visualForm.target) {
+                            ElMessage.warning('请输入目标');
+                            return;
+                        }
+                    } else if (!visualForm.source) {
+                        ElMessage.warning('请输入源路径');
+                        return;
+                    }
+
+                    const c = visualComponents[visualEditIndex.value];
+                    if (!c) return;
+                    if (type === 'shortcut') {
+                        c.props = {
+                            name: visualForm.name,
+                            target: visualForm.target,
+                            args: visualForm.args,
+                            icon: visualForm.icon,
+                            description: visualForm.description
+                        };
+                    } else {
+                        c.props = {
+                            source: visualForm.source,
+                            destination: visualForm.destination || '$INSTDIR',
+                            recursive: Boolean(visualForm.recursive),
+                            description: visualForm.description
+                        };
+                    }
+                    visualEditDialog.value = false;
                 }
 
                 function applyVisualToConfig() {
-                    // Map visual file-like components to config.files entries
+                    const errors = [];
+                    visualComponents.forEach((c, idx) => {
+                        const status = getVisualStatus(c);
+                        if (!status.valid) {
+                            errors.push(`第${idx + 1}项${status.message}`);
+                        }
+                    });
+                    if (errors.length) {
+                        const extra = errors.length > 1 ? `（共${errors.length}项）` : '';
+                        ElMessage.error(`可视化项未完善：${errors[0]}${extra}`);
+                        return;
+                    }
+
+                    // Persist visual components to config.visual for later restoration
+                    try {
+                        config.visual = { components: visualComponents.map(c => ({ type: c.type, props: c.props })) };
+                    } catch (e) {
+                        config.visual = Object.assign({}, { components: visualComponents.map(c => ({ type: c.type, props: c.props })) });
+                    }
+
+                    // Also add file-like items into config.files for compatibility with existing flows
                     if (!config.files) config.files = [];
                     visualComponents.forEach((c, idx) => {
                         if (c.type === 'file') {
-                            // If source set, use it; otherwise generate a placeholder
                             const src = c.props.source || `visual-file-${idx + 1}.bin`;
-                            config.files.push(src);
+                            const dst = c.props.destination || '$INSTDIR';
+                            if (dst === '$INSTDIR' && !c.props.recursive) {
+                                config.files.push(src);
+                            } else {
+                                config.files.push({ source: src, destination: dst, recursive: Boolean(c.props.recursive) });
+                            }
                         } else if (c.type === 'folder') {
                             const src = c.props.source || `visual-folder-${idx + 1}`;
-                            config.files.push({ source: src, destination: '$INSTDIR' });
+                            const dst = c.props.destination || '$INSTDIR';
+                            config.files.push({ source: src, destination: dst, recursive: Boolean(c.props.recursive) });
                         } else if (c.type === 'shortcut') {
-                            // Shortcuts are not files — add as a metadata entry
                             if (!config.shortcuts) config.shortcuts = [];
-                            config.shortcuts.push({ name: c.props.source || `Shortcut ${idx + 1}` });
+                            config.shortcuts.push({
+                                name: c.props.name || `Shortcut ${idx + 1}`,
+                                target: c.props.target || '',
+                                args: c.props.args || '',
+                                icon: c.props.icon || '',
+                                description: c.props.description || ''
+                            });
                         }
                     });
+
                     onConfigChange();
                     ElMessage.success('已将可视化项应用到配置（即将同步到 YAML）');
                 }
@@ -524,6 +1101,42 @@
                             // Update config without triggering watchers
                             isEditorChange = true;
                             Object.assign(config, data.config);
+
+                            // Restore visual components if present in the loaded config
+                            visualComponents.splice(0);
+
+                            if (data.config && data.config.visual && Array.isArray(data.config.visual.components) && data.config.visual.components.length) {
+                                // YAML explicitly contains visual components -> restore them
+                                data.config.visual.components.forEach(c => visualComponents.push(c));
+                            } else {
+                                // No explicit visual section: try to derive canvas items from common config fields
+                                if (data.config && data.config.shortcuts && Array.isArray(data.config.shortcuts)) {
+                                    data.config.shortcuts.forEach((s, idx) => {
+                                        visualComponents.push({ type: 'shortcut', props: {
+                                            name: s.name || `Shortcut ${idx+1}`,
+                                            target: s.target || '',
+                                            args: s.args || '',
+                                            icon: s.icon || '',
+                                            description: s.description || ''
+                                        }});
+                                    });
+                                }
+                                if (data.config && data.config.files && Array.isArray(data.config.files)) {
+                                    data.config.files.forEach((f, idx) => {
+                                        if (typeof f === 'string') {
+                                            visualComponents.push({ type: 'file', props: { source: f, destination: '$INSTDIR' } });
+                                        } else if (f && f.source) {
+                                            visualComponents.push({ type: 'file', props: { source: f.source, destination: f.destination || '$INSTDIR', recursive: Boolean(f.recursive) } });
+                                        }
+                                    });
+                                }
+                            }
+
+                            // Ensure Monaco editor/layout updates after DOM changes
+                            setTimeout(() => {
+                                try { if (editor && typeof editor.layout === 'function') editor.layout(); } catch (e) { console.warn('editor.layout failed', e); }
+                            }, 80);
+
                             yamlPreview.value = yamlContent.value;
                             validationStatus.valid = true;
                             validationStatus.message = '配置有效';
@@ -671,6 +1284,236 @@
                     ElMessage.success('文件已删除');
                 }
                 
+                // Registry functions
+                function addRegistry() {
+                    editingRegistryIndex = -1;
+                    Object.assign(registryForm, {
+                        hive: 'HKLM',
+                        key: '',
+                        name: '',
+                        value: '',
+                        type: 'REG_SZ',
+                        view: ''
+                    });
+                    registryDialog.value = true;
+                }
+                
+                function confirmRegistry() {
+                    if (!registryForm.key || !registryForm.name) {
+                        ElMessage.warning('请输入键路径和值名称');
+                        return;
+                    }
+                    
+                    if (!config.install) {
+                        config.install = {};
+                    }
+                    if (!config.install.registry) {
+                        config.install.registry = [];
+                    }
+                    
+                    const entry = {
+                        hive: registryForm.hive,
+                        key: registryForm.key,
+                        name: registryForm.name,
+                        value: registryForm.value,
+                        type: registryForm.type
+                    };
+                    
+                    if (registryForm.view) {
+                        entry.view = registryForm.view;
+                    }
+                    
+                    if (editingRegistryIndex >= 0) {
+                        config.install.registry[editingRegistryIndex] = entry;
+                        ElMessage.success('注册表项已更新');
+                    } else {
+                        config.install.registry.push(entry);
+                        ElMessage.success('注册表项已添加');
+                    }
+                    
+                    registryDialog.value = false;
+                    onConfigChange();
+                }
+                
+                function removeRegistry(index) {
+                    config.install.registry.splice(index, 1);
+                    onConfigChange();
+                    ElMessage.success('注册表项已删除');
+                }
+                
+                // Environment Variable functions
+                function addEnvVar() {
+                    editingEnvVarIndex = -1;
+                    Object.assign(envVarForm, {
+                        name: '',
+                        value: '',
+                        scope: 'user',
+                        append: false
+                    });
+                    envVarDialog.value = true;
+                }
+                
+                function confirmEnvVar() {
+                    if (!envVarForm.name || !envVarForm.value) {
+                        ElMessage.warning('请输入变量名和值');
+                        return;
+                    }
+                    
+                    if (!config.install) {
+                        config.install = {};
+                    }
+                    if (!config.install.env_vars) {
+                        config.install.env_vars = [];
+                    }
+                    
+                    const entry = {
+                        name: envVarForm.name,
+                        value: envVarForm.value,
+                        scope: envVarForm.scope,
+                        append: envVarForm.append
+                    };
+                    
+                    if (editingEnvVarIndex >= 0) {
+                        config.install.env_vars[editingEnvVarIndex] = entry;
+                        ElMessage.success('环境变量已更新');
+                    } else {
+                        config.install.env_vars.push(entry);
+                        ElMessage.success('环境变量已添加');
+                    }
+                    
+                    envVarDialog.value = false;
+                    onConfigChange();
+                }
+                
+                function removeEnvVar(index) {
+                    config.install.env_vars.splice(index, 1);
+                    onConfigChange();
+                    ElMessage.success('环境变量已删除');
+                }
+                
+                // Shortcut functions (dialog)
+                function addShortcut() {
+                    editingShortcutIndex = -1;
+                    Object.assign(shortcutForm, {
+                        name: '',
+                        target: '',
+                        args: '',
+                        icon: '',
+                        description: '',
+                        working_dir: ''
+                    });
+                    shortcutDialog.value = true;
+                }
+
+                function confirmShortcut() {
+                    if (!shortcutForm.name || !shortcutForm.target) {
+                        ElMessage.warning('请输入快捷方式名称和目标路径');
+                        return;
+                    }
+
+                    if (!config.shortcuts) {
+                        config.shortcuts = [];
+                    }
+
+                    const entry = {
+                        name: shortcutForm.name,
+                        target: shortcutForm.target
+                    };
+
+                    if (shortcutForm.args) entry.args = shortcutForm.args;
+                    if (shortcutForm.icon) entry.icon = shortcutForm.icon;
+                    if (shortcutForm.description) entry.description = shortcutForm.description;
+                    if (shortcutForm.working_dir) entry.working_dir = shortcutForm.working_dir;
+
+                    if (editingShortcutIndex >= 0) {
+                        config.shortcuts[editingShortcutIndex] = entry;
+                        ElMessage.success('快捷方式已更新');
+                    } else {
+                        config.shortcuts.push(entry);
+                        ElMessage.success('快捷方式已添加');
+                    }
+
+                    shortcutDialog.value = false;
+                    onConfigChange();
+                }
+
+                function removeShortcut(index) {
+                    config.shortcuts.splice(index, 1);
+                    onConfigChange();
+                    ElMessage.success('快捷方式已删除');
+                }
+
+                // ---------- 行内编辑、拖拽与快速排序（通用） ----------
+                function startInlineRegistry(index) {
+                    editingRegistryIndex = index;
+                    Object.assign(registryForm, JSON.parse(JSON.stringify(config.install.registry[index] || {})));
+                }
+
+                function saveInlineRegistry(index) {
+                    if (!registryForm.key || !registryForm.name) { ElMessage.warning('键路径和值名称为必填'); return; }
+                    config.install.registry[index] = Object.assign({}, registryForm);
+                    editingRegistryIndex = -1; onConfigChange(); ElMessage.success('注册表项已保存');
+                }
+
+                function cancelInlineRegistry() { editingRegistryIndex = -1; }
+
+                function startInlineEnvVar(index) {
+                    editingEnvVarIndex = index; Object.assign(envVarForm, JSON.parse(JSON.stringify(config.install.env_vars[index] || {})));
+                }
+
+                function saveInlineEnvVar(index) {
+                    if (!envVarForm.name || !envVarForm.value) { ElMessage.warning('变量名和值为必填'); return; }
+                    config.install.env_vars[index] = Object.assign({}, envVarForm); editingEnvVarIndex = -1; onConfigChange(); ElMessage.success('环境变量已保存');
+                }
+
+                function cancelInlineEnvVar() { editingEnvVarIndex = -1; }
+
+                function startInlineShortcut(index) { editingShortcutIndex = index; Object.assign(shortcutForm, JSON.parse(JSON.stringify(config.shortcuts[index] || {}))); }
+                function saveInlineShortcut(index) { if (!shortcutForm.name || !shortcutForm.target) { ElMessage.warning('名称和目标为必填'); return; } config.shortcuts[index] = Object.assign({}, shortcutForm); editingShortcutIndex = -1; onConfigChange(); ElMessage.success('快捷方式已保存'); }
+                function cancelInlineShortcut() { editingShortcutIndex = -1; }
+
+                // Up / Down helpers (keyboard-friendly reorder)
+                function moveRegistryUp() { if (!config.install?.registry?.length) return; const i = editingRegistryIndex >= 0 ? editingRegistryIndex : 0; if (i <= 0) return; const arr = config.install.registry; const el = arr.splice(i,1)[0]; arr.splice(i-1,0,el); onConfigChange(); }
+                function moveRegistryDown() { if (!config.install?.registry?.length) return; const i = editingRegistryIndex >= 0 ? editingRegistryIndex : 0; const arr = config.install.registry; if (i >= arr.length-1) return; const el = arr.splice(i,1)[0]; arr.splice(i+1,0,el); onConfigChange(); }
+                function moveEnvUp() { if (!config.install?.env_vars?.length) return; const i = editingEnvVarIndex >= 0 ? editingEnvVarIndex : 0; if (i <= 0) return; const arr = config.install.env_vars; const el = arr.splice(i,1)[0]; arr.splice(i-1,0,el); onConfigChange(); }
+                function moveEnvDown() { if (!config.install?.env_vars?.length) return; const i = editingEnvVarIndex >= 0 ? editingEnvVarIndex : 0; const arr = config.install.env_vars; if (i >= arr.length-1) return; const el = arr.splice(i,1)[0]; arr.splice(i+1,0,el); onConfigChange(); }
+                function moveShortcutUp() { if (!config.shortcuts?.length) return; const i = editingShortcutIndex >= 0 ? editingShortcutIndex : 0; if (i <= 0) return; const arr = config.shortcuts; const el = arr.splice(i,1)[0]; arr.splice(i-1,0,el); onConfigChange(); }
+                function moveShortcutDown() { if (!config.shortcuts?.length) return; const i = editingShortcutIndex >= 0 ? editingShortcutIndex : 0; const arr = config.shortcuts; if (i >= arr.length-1) return; const el = arr.splice(i,1)[0]; arr.splice(i+1,0,el); onConfigChange(); }
+
+                // Drag handlers
+                function onListDragStart(section, index, ev) { dragState.section = section; dragState.index = index; try { ev.dataTransfer.effectAllowed = 'move'; } catch(e) {} }
+                function onListDrop(section, index, ev) {
+                    if (dragState.section !== section) return; if (dragState.index === index) return; let arr = null; if (section === 'registry') arr = config.install.registry; else if (section === 'env') arr = config.install.env_vars; else if (section === 'shortcut') arr = config.shortcuts; if (!arr) return; const el = arr.splice(dragState.index,1)[0]; const targetIndex = dragState.index < index ? index - 1 : index; arr.splice(targetIndex,0,el); dragState.index = -1; dragState.section = ''; onConfigChange(); }
+
+                // Toggle compact mode (减少左侧占用，为可视化画布留更多空间)
+                function toggleCompact() {
+                    compactMode.value = !compactMode.value;
+                    ElMessage.info(compactMode.value ? '已切换到紧凑模式' : '已切换到常规模式');
+                    setTimeout(() => { try { if (editor && typeof editor.layout === 'function') editor.layout(); } catch (e) { console.warn('editor.layout failed', e); } }, 160);
+                }
+
+                function toggleLeftCollapse() {
+                    leftCollapsed.value = !leftCollapsed.value;
+                    ElMessage.info(leftCollapsed.value ? '左侧已折叠' : '左侧已展开');
+                    setTimeout(() => { try { if (editor && typeof editor.layout === 'function') editor.layout(); } catch (e) {} }, 180);
+                }
+
+                function toggleRightCollapse() {
+                    rightCollapsed.value = !rightCollapsed.value;
+                    ElMessage.info(rightCollapsed.value ? '预览已隐藏' : '预览已显示');
+                    setTimeout(() => { try { if (editor && typeof editor.layout === 'function') editor.layout(); } catch (e) {} }, 180);
+                }
+
+                // Auto-expand canvas when switching to visual tab
+                watch(activeTab, (v) => {
+                    if (v === 'visual' && autoCollapseOnVisual.value) {
+                        // temporarily collapse side panels to maximize canvas
+                        leftCollapsed.value = true;
+                        rightCollapsed.value = true;
+                        setTimeout(() => { try { if (editor && typeof editor.layout === 'function') editor.layout(); } catch (e) {} }, 200);
+                    }
+                });
+
                 return {
                     activeTab,
                     config,
@@ -686,13 +1529,70 @@
                     addFile,
                     confirmAddFile,
                     removeFile,
+                    compactMode,
+                    toggleCompact,
+                    // Collapse controls
+                    leftCollapsed,
+                    rightCollapsed,
+                    autoCollapseOnVisual,
+                    toggleLeftCollapse,
+                    toggleRightCollapse,
                     // Visual editor bindings
                     visualComponents,
                     onDragStart,
                     onDrop,
                     removeVisual,
                     editVisual,
-                    applyVisualToConfig
+                    applyVisualToConfig,
+                    visualEditDialog,
+                    visualForm,
+                    saveVisualEdit,
+                    getVisualStatus,
+                    // Registry bindings
+                    registryDialog,
+                    registryForm,
+                    registrySearch,
+                    filteredRegistry,
+                    editingRegistryIndex,
+                    addRegistry,
+                    confirmRegistry,
+                    removeRegistry,
+                    startInlineRegistry,
+                    saveInlineRegistry,
+                    cancelInlineRegistry,
+                    moveRegistryUp,
+                    moveRegistryDown,
+                    // Environment variable bindings
+                    envVarDialog,
+                    envVarForm,
+                    envSearch,
+                    filteredEnvVars,
+                    editingEnvVarIndex,
+                    addEnvVar,
+                    confirmEnvVar,
+                    removeEnvVar,
+                    startInlineEnvVar,
+                    saveInlineEnvVar,
+                    cancelInlineEnvVar,
+                    moveEnvUp,
+                    moveEnvDown,
+                    // Shortcut bindings
+                    shortcutDialog,
+                    shortcutForm,
+                    shortcutSearch,
+                    filteredShortcuts,
+                    editingShortcutIndex,
+                    addShortcut,
+                    confirmShortcut,
+                    removeShortcut,
+                    startInlineShortcut,
+                    saveInlineShortcut,
+                    cancelInlineShortcut,
+                    moveShortcutUp,
+                    moveShortcutDown,
+                    // List drag handlers
+                    onListDragStart,
+                    onListDrop
                 };
             }
         }).use(ElementPlus).mount('#app');

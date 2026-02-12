@@ -7,6 +7,7 @@ YPack Web UI 是一个基于 Web 的可视化编辑器，用于创建和编辑 Y
 ## 功能特性
 
 ✅ **Phase 1 (当前版本)**
+
 - 📝 应用信息表单编辑
 - 📁 文件列表管理
 - 💻 Monaco Editor YAML 代码编辑
@@ -15,6 +16,7 @@ YPack Web UI 是一个基于 Web 的可视化编辑器，用于创建和编辑 Y
 - 💾 项目加载/保存
 
 🚧 **计划中**
+
 - 🌲 Packages 树形编辑器（拖拽组件层级）
 - ⚙️ 完整 InstallConfig 表单（注册表、环境变量、文件关联等）
 - 🔍 NSIS/WiX/Inno 脚本预览
@@ -35,16 +37,19 @@ pip install flask flask-cors jsonschema
 ### 2. 启动服务器
 
 **方法 1：使用命令行工具**
+
 ```bash
 xswl-ypack-web
 ```
 
 **方法 2：使用 Python 模块**
+
 ```bash
 python -m ypack_web.server
 ```
 
 **方法 3：自定义参数**
+
 ```bash
 # 指定端口和主机
 xswl-ypack-web --host 0.0.0.0 --port 8080 --debug
@@ -55,7 +60,7 @@ xswl-ypack-web --help
 
 ### 3. 打开浏览器
 
-访问 http://127.0.0.1:5000
+访问 <http://127.0.0.1:5000>
 
 ## 使用指南
 
@@ -95,19 +100,23 @@ xswl-ypack-web --help
 Web UI 提供了 RESTful API，可用于集成或自动化：
 
 ### Schema 相关
+
 - `GET /api/schema` - 获取 JSON Schema
 - `GET /api/schema/enums` - 获取枚举值
 
 ### 验证相关
+
 - `POST /api/validate/yaml` - 验证 YAML 内容
 - `POST /api/validate/config` - 验证配置字典
 
 ### 项目管理
+
 - `POST /api/project/new` - 创建新项目
 - `POST /api/project/load` - 从 YAML 加载
 - `POST /api/project/save` - 保存为 YAML
 
 ### 辅助功能
+
 - `GET /api/variables/builtin` - 获取内置变量
 - `GET /api/health` - 健康检查
 
@@ -137,12 +146,14 @@ Web UI 提供了 RESTful API，可用于集成或自动化：
 ## 技术栈
 
 ### 后端
+
 - **Flask** - Web 框架
 - **Flask-CORS** - 跨域支持
 - **PyYAML** - YAML 解析
 - **jsonschema** - Schema 验证
 
 ### 前端
+
 - **Vue 3** - 前端框架
 - **Element Plus** - UI 组件库
 - **Monaco Editor** - 代码编辑器
@@ -157,6 +168,7 @@ xswl-ypack-web --debug
 ```
 
 调试模式特性：
+
 - 自动重载代码变更
 - 详细错误堆栈
 - CORS 允许所有来源
@@ -202,6 +214,7 @@ ypack_web/
 参考 [WEB_UI_DESIGN.md](WEB_UI_DESIGN.md) 了解完整的设计方案和后续开发计划。
 
 **Phase 2 计划**：
+
 - Packages 树形编辑器
 - 注册表/环境变量/文件关联编辑
 - NSIS 脚本预览
