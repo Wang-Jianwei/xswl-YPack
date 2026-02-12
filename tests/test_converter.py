@@ -591,8 +591,14 @@ class TestOnInit:
         cfg = _simple_config()
         cfg.install.existing_install = ExistingInstallConfig(mode="prompt_uninstall", version_check=True)
         script = YamlToNsisConverter(cfg).convert()
-        assert 'ReadRegStr $R2 HKLM "${REG_KEY}" "Version"' in script
-        assert 'StrCmp $R2 "${APP_VERSION}" _ei_done' in script
+        assert 'Call _YPACK_GetFileProductVersion' in script
+        assert 'StrCmp $R2 "${APP_VERSION}" _ei_done 0' in script
+        assert 'StrCmp $R2 "${APP_VERSION_VI}" _ei_done' in script
+        # Read version only after confirming an actual install (uninstaller exists)
+        idx_if = script.index('IfFileExists "$R1\\Uninstall.exe" _ei_has_uninst _ei_overwrite_only')
+        idx_label = script.index('_ei_has_uninst:')
+        idx_read = script.index('Call _YPACK_GetFileProductVersion')
+        assert idx_if < idx_label < idx_read
 
     def test_version_check_disabled_no_version_skip(self):
         cfg = _simple_config()
@@ -614,6 +620,11 @@ class TestOnInit:
         # And the callback function should be present and check the chosen directory
         assert 'Function ExistingInstall_DirLeave' in script
         assert 'IfFileExists "$R1\\Uninstall.exe"' in script
+        # If the registry install path matches the selected $INSTDIR, we still
+        # require Uninstall.exe before showing version or prompting.
+        assert 'StrCmp $R0 "$R1" 0 _eid_done' in script
+        assert 'IfFileExists "$R1\\Uninstall.exe" _eid_has_uninst _eid_done' in script
+        assert 'Call _YPACK_GetFileProductVersion' in script
 
     def test_allow_multiple_legacy_field(self):
         """Legacy allow_multiple_installations should set allow_multiple."""

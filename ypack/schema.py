@@ -124,10 +124,12 @@ CONFIG_SCHEMA: Dict[str, Any] = {
                 "name": _STRING,
                 "version": _STRING,
                 "publisher": _STRING,
+                "branding": _STRING,
                 "description": _LANG_TEXT,
                 "install_icon": _STRING,
                 "uninstall_icon": _STRING,
                 "license": _LANG_TEXT,
+                "vi_product_version": _STRING,
             },
         },
         "install": {

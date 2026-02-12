@@ -499,26 +499,6 @@ def _generate_existing_install_check(ctx: BuildContext) -> List[str]:
         '  StrCmp $R0 "" _ei_done  ; No previous install registered',
     ]
 
-    # Version check: read installed version into $R2
-    if ei.version_check or ei.show_version_info:
-        lines.extend([
-            '  ReadRegStr $R2 HKLM "${REG_KEY}" "Version"',
-        ])
-
-    # Version check: skip detection when installed version matches
-    if ei.version_check:
-        lines.extend([
-            '  ; Skip if same version is already installed',
-            '  StrCmp $R2 "${APP_VERSION}" _ei_done',
-        ])
-
-    # allow_multiple: only treat as conflict if same directory
-    if ei.allow_multiple:
-        lines.extend([
-            '  ; allow_multiple: only conflict when installing to the same directory',
-            '  StrCmp $R0 "$INSTDIR" 0 _ei_done',
-        ])
-
     # $R1 = install path for messages / uninstaller call
     lines.extend([
         '  StrCpy $R1 $R0',
@@ -531,6 +511,47 @@ def _generate_existing_install_check(ctx: BuildContext) -> List[str]:
 
     # --- _ei_has_uninst ---
     lines.append('_ei_has_uninst:')
+
+    # Only read/show installed package version when we have confirmed a real installation
+    # (i.e., the uninstaller exists in the registered install directory).
+    if ei.version_check or ei.show_version_info:
+        lines.extend([
+            '  ; Derive installed package version from Uninstall.exe ProductVersion (WinAPI)',
+            '  StrCpy $R6 "ProductVersion"',
+            '  Push "$R1\\Uninstall.exe"',
+            '  Call _YPACK_GetFileProductVersion',
+            '  Pop $R2',
+            '  StrCmp $R2 "" 0 _ei_ver_done',
+            '  ; Fallback: use numeric file version (VS_FIXEDFILEINFO)',
+            '  StrCpy $R6 "FileVersionFixed"',
+            '  GetDLLVersion "$R1\\Uninstall.exe" $0 $1',
+            '  StrCmp $0 0 +2 0',
+            '  Goto +3',
+            '  StrCmp $1 0 +2 0',
+            '  Goto +1',
+            '  StrCpy $R2 ""',
+            '  IntOp $2 $0 >> 16',
+            '  IntOp $3 $0 & 0xFFFF',
+            '  IntOp $4 $1 >> 16',
+            '  IntOp $5 $1 & 0xFFFF',
+            '  StrCpy $R2 "$2.$3.$4.$5"',
+            '  StrCmp $R2 "0.0.0.0" 0 +2',
+            '    StrCpy $R2 ""',
+            '_ei_ver_done:',
+        ])
+
+        if has_logging:
+            lines.extend([
+                '  !insertmacro _YPACK_DebugLog "[YPACK] ExistingInstall: resolved version=$R2 source=$R6 (path=$R1)"',
+            ])
+
+    # Version check: skip detection when installed version matches
+    if ei.version_check:
+        lines.extend([
+            '  ; Skip if same version is already installed',
+            '  StrCmp $R2 "${APP_VERSION}" _ei_done 0',
+            '  StrCmp $R2 "${APP_VERSION_VI}" _ei_done',
+        ])
 
     if ei.mode == "prompt_uninstall":
         if ei.show_version_info:
@@ -652,39 +673,254 @@ def generate_existing_install_helpers(ctx: BuildContext) -> List[str]:
     installation and performs the same prompting/uninstall logic used in
     the .onInit flow.
     """
-    ei = ctx.config.install.existing_install
-    if not ei or ei.mode == "none" or not ei.allow_multiple:
-        return []
-
     cfg = ctx.config
     has_logging = bool(cfg.logging and cfg.logging.enabled)
+
+    ei = cfg.install.existing_install
+    if not ei or ei.mode == "none":
+        return []
+
+    needs_version = bool(ei.version_check or ei.show_version_info)
+    lines: List[str] = []
+
+    if needs_version and has_logging:
+        # Use a macro (inline expansion) instead of a Function to avoid
+        # stack-interaction issues when called from nested helper functions
+        # like _YPACK_GetFileProductVersion.
+        # Use high registers ($R7-$R9) to minimize conflicts with function code.
+        lines.extend([
+            '',
+            '  ; ------------------------------------------------------------------',
+            '  ; Early debug log macro (independent from install log; works in .onInit)',
+            '  ; Writes to: $TEMP\\ypack-debug.log',
+            '  ; Implemented as !macro to avoid nested-function stack conflicts.',
+            '  ; Uses $R7/$R8 (high registers) to avoid conflicts with main code.',
+            '  ; ------------------------------------------------------------------',
+            '!macro _YPACK_DebugLog _msg',
+            '  Push $R7',
+            '  Push $R8',
+            '  StrCpy $R7 `${_msg}`',
+            '  FileOpen $R8 "$TEMP\\ypack-debug.log" a',
+            '  IntCmp $R8 0 +4',
+            '  FileSeek $R8 0 END',
+            '  FileWrite $R8 "$R7$\\r$\\n"',
+            '  FileClose $R8',
+            '  Pop $R8',
+            '  Pop $R7',
+            '!macroend',
+            '',
+        ])
+
+    if needs_version:
+        lines.extend([
+            '',
+            '  ; ------------------------------------------------------------------',
+            '  ; VersionInfo helper: read ProductVersion from a file (WinAPI)',
+            '  ; ------------------------------------------------------------------',
+            'Function _YPACK_GetFileProductVersion',
+            '  Exch $0  ; file path',
+            '  Push $1',
+            '  Push $2',
+            '  Push $3',
+            '  Push $4',
+            '  Push $5',
+            '  Push $6',
+            '  Push $7',
+            '  Push $8',
+            '  StrCpy $9 ""',
+            '  !insertmacro _YPACK_DebugLog "[YPACK] VerInfo: reading ProductVersion from: $0"',
+            '  ; DWORD GetFileVersionInfoSizeW(LPCWSTR lptstrFilename, LPDWORD lpdwHandle);',
+            '  System::Call \'version::GetFileVersionInfoSizeW(w r0, *i .r1) i .r2\'',
+            '  !insertmacro _YPACK_DebugLog "[YPACK] VerInfo: GetFileVersionInfoSizeW -> size=$2"',
+            '  StrCmp $2 0 _ypack_ver_done',
+            '  System::Alloc $2',
+            '  Pop $3',
+            '  !insertmacro _YPACK_DebugLog "[YPACK] VerInfo: Alloc -> ptr=$3"',
+            '  StrCmp $3 0 _ypack_ver_done',
+            '  ; BOOL GetFileVersionInfoW(LPCWSTR, DWORD, DWORD, LPVOID);',
+            '  System::Call \'version::GetFileVersionInfoW(w r0, i 0, i r2, i r3) i .r4\'',
+            '  !insertmacro _YPACK_DebugLog "[YPACK] VerInfo: GetFileVersionInfoW -> ok=$4"',
+            '  StrCmp $4 0 _ypack_ver_free',
+            '  ; BOOL VerQueryValueW(LPCVOID, LPCWSTR, LPVOID*, PUINT);',
+            '  System::Call \'version::VerQueryValueW(i r3, w "\\VarFileInfo\\Translation", *p .r5, *i .r6) i .r7\'',
+            '  !insertmacro _YPACK_DebugLog "[YPACK] VerInfo: Translation query -> ok=$7 ptr=$5 len=$6"',
+            '  StrCmp $7 0 _ypack_ver_fallback_lang',
+            '  ; Read first LANGANDCODEPAGE as a DWORD (low WORD=lang, high WORD=codepage)',
+            '  System::Call "*$5(&i .r8)"',
+            '  IntOp $6 $8 & 0xFFFF',
+            '  IntOp $7 $8 >> 16',
+            '  IntFmt $1 "%04X" $6',
+            '  IntFmt $2 "%04X" $7',
+            '  StrCpy $1 "$1$2"',
+            '  ; If Translation returned 0x00000000, skip it and use common fallbacks',
+            '  StrCmp $1 "00000000" _ypack_ver_fallback_lang',
+            '  Goto _ypack_ver_query',
+            '_ypack_ver_fallback_lang:',
+            '  ; Fallback to common language/codepage combinations',
+            '  ; Try 0409/04B0 (English/Unicode), most common for installers',
+            '  StrCpy $1 "040904B0"',
+            '  Goto _ypack_ver_query',
+            '_ypack_ver_query:',
+            '  StrCpy $2 "\\StringFileInfo\\$1\\ProductVersion"',
+            '  !insertmacro _YPACK_DebugLog "[YPACK] VerInfo: Query ProductVersion with langcp=$1"',
+            '  System::Call \'version::VerQueryValueW(i r3, w r2, *p .r5, *i .r6) i .r7\'',
+            '  StrCmp $7 0 _ypack_ver_try_next_lang',
+            '  System::Call "*$5(&t${NSIS_MAX_STRLEN} .r9)"',
+            '  !insertmacro _YPACK_DebugLog "[YPACK] VerInfo: ProductVersion=$9"',
+            '  StrCmp $9 "" 0 _ypack_ver_ok',
+            '  ; ProductVersion missing: try FileVersion string key',
+            '  StrCpy $2 "\\StringFileInfo\\$1\\FileVersion"',
+            '  !insertmacro _YPACK_DebugLog "[YPACK] VerInfo: ProductVersion empty; trying FileVersion string"',
+            '  System::Call \'version::VerQueryValueW(i r3, w r2, *p .r5, *i .r6) i .r7\'',
+            '  StrCmp $7 0 _ypack_ver_try_next_lang',
+            '  System::Call "*$5(&t${NSIS_MAX_STRLEN} .r9)"',
+            '  Goto _ypack_ver_ok',
+            '_ypack_ver_try_next_lang:',
+            '  !insertmacro _YPACK_DebugLog "[YPACK] VerInfo: Query failed; trying next langcp..."',
+            '  ; Cycle through common langcp values: 040904B0 -> 080404B0 -> 000004B0 -> give up',
+            '  StrCmp $1 "040904B0" 0 +3',
+            '  StrCpy $1 "080404B0"',
+            '  Goto _ypack_ver_query',
+            '  StrCmp $1 "080404B0" 0 +3',
+            '  StrCpy $1 "000004B0"',
+            '  Goto _ypack_ver_query',
+            '  Goto _ypack_ver_free',
+            '_ypack_ver_ok:',
+            '  ; $9 now contains ProductVersion/FileVersion (or empty)',
+            '  StrCpy $9 $9',
+            '_ypack_ver_free:',
+            '  StrCmp $3 0 _ypack_ver_done',
+            '  System::Free $3',
+            '_ypack_ver_done:',
+            '  Pop $8',
+            '  Pop $7',
+            '  Pop $6',
+            '  Pop $5',
+            '  Pop $4',
+            '  Pop $3',
+            '  Pop $2',
+            '  Pop $1',
+            '  Exch $9',
+            'FunctionEnd',
+            '',
+        ])
+
+    if not ei.allow_multiple:
+        return lines
+
     prompt_text = '$(UNINSTALL_NOT_FINISHED)' if cfg.languages else \
         'The previous uninstaller did not finish.  Retry or cancel installation?'
 
-    lines: List[str] = [
+    entry_log: List[str] = []
+    if has_logging:
+        entry_log = [
+            '  !insertmacro _YPACK_DebugLog "[YPACK] ExistingInstall_DirLeave: ENTRY user-selected INSTDIR=$INSTDIR"',
+        ]
+
+    lines.extend([
         "",
         "  ; ------------------------------------------------------------------",
         "  ; Existing-install helpers (directory page leave callback)",
         "  ; ------------------------------------------------------------------",
         "Function ExistingInstall_DirLeave",
         "",
+        *entry_log,
         f'  SetRegView {ctx.effective_reg_view}',
         "  ; Check the user-selected directory ($INSTDIR) for an uninstaller",
         '  StrCpy $R1 $INSTDIR',
+    ])
+
+    if has_logging:
+        lines.append('  !insertmacro _YPACK_DebugLog "[YPACK] ExistingInstall_DirLeave: checking path=$R1"')
+
+    lines.extend([
         '  IfFileExists "$R1\\Uninstall.exe" _eid_has_uninst _eid_check_reg',
+    ])
+
+    if has_logging:
+        lines.append('  !insertmacro _YPACK_DebugLog "[YPACK] ExistingInstall_DirLeave: no Uninstall.exe found at selected path, checking registry..."')
+
+    lines.extend([
         '  Goto _eid_done',
         '',
         '_eid_check_reg:',
+    ])
+
+    if has_logging:
+        lines.append('  !insertmacro _YPACK_DebugLog "[YPACK] ExistingInstall_DirLeave: Uninstall.exe found; checking registry match..."')
+
+    lines.extend([
         '  ; Also consider the registered install path as a match',
         '  ReadRegStr $R0 HKLM "${REG_KEY}" "InstallPath"',
+    ])
+
+    if has_logging:
+        lines.append('  !insertmacro _YPACK_DebugLog "[YPACK] ExistingInstall_DirLeave: registry InstallPath=$R0"')
+
+    lines.extend([
         '  StrCmp $R0 "$R1" 0 _eid_done',
+        '  ; Path matches registry; still require an actual uninstaller at that path',
+        '  IfFileExists "$R1\\Uninstall.exe" _eid_has_uninst _eid_done',
         '',
         '_eid_has_uninst:',
-    ]
+    ])
 
     # Optionally read installed version for prompts / version check
     if ei.version_check or ei.show_version_info:
-        lines.append('  ReadRegStr $R2 HKLM "${REG_KEY}" "Version"')
+        pre_call_logs: List[str] = []
+        post_call_logs: List[str] = []
+        fallback_logs: List[str] = []
+        if has_logging:
+            pre_call_logs = [
+                '  !insertmacro _YPACK_DebugLog "[YPACK] ExistingInstall_DirLeave: entering ProductVersion branch (target=$R1\\Uninstall.exe)"',
+            ]
+            post_call_logs = [
+                '  !insertmacro _YPACK_DebugLog "[YPACK] ExistingInstall_DirLeave: ProductVersion raw result=$R2"',
+            ]
+            fallback_logs = [
+                '  !insertmacro _YPACK_DebugLog "[YPACK] ExistingInstall_DirLeave: ProductVersion empty -> fallback GetDLLVersion"',
+            ]
+
+        lines.extend([
+            '  ; Derive installed package version from Uninstall.exe ProductVersion (WinAPI)',
+            '  StrCpy $R6 "ProductVersion"',
+            *pre_call_logs,
+            '  Push "$R1\\Uninstall.exe"',
+            '  Call _YPACK_GetFileProductVersion',
+            '  Pop $R2',
+            *post_call_logs,
+            '  StrCmp $R2 "" 0 _eid_ver_done',
+            '  ; Fallback: use numeric file version (VS_FIXEDFILEINFO)',
+            *fallback_logs,
+            '  StrCpy $R6 "FileVersionFixed"',
+            '  GetDLLVersion "$R1\\Uninstall.exe" $0 $1',
+            '  StrCmp $0 0 +2 0',
+            '  Goto +3',
+            '  StrCmp $1 0 +2 0',
+            '  Goto +1',
+            '  StrCpy $R2 ""',
+            '  IntOp $2 $0 >> 16',
+            '  IntOp $3 $0 & 0xFFFF',
+            '  IntOp $4 $1 >> 16',
+            '  IntOp $5 $1 & 0xFFFF',
+            '  StrCpy $R2 "$2.$3.$4.$5"',
+            '  StrCmp $R2 "0.0.0.0" 0 +2',
+            '    StrCpy $R2 ""',
+            '_eid_ver_done:',
+        ])
+
+        if has_logging:
+            lines.extend([
+                '  !insertmacro _YPACK_DebugLog "[YPACK] ExistingInstall_DirLeave: resolved version=$R2 source=$R6 (path=$R1)"',
+            ])
+
+    # Version check: skip prompting/uninstall when installed version matches
+    if ei.version_check:
+        lines.extend([
+            '  ; Skip if same version is already installed',
+            '  StrCmp $R2 "${APP_VERSION}" _eid_done 0',
+            '  StrCmp $R2 "${APP_VERSION_VI}" _eid_done',
+        ])
 
     # Prompt / behavior
     if ei.mode == "prompt_uninstall":
@@ -775,6 +1011,12 @@ def generate_existing_install_helpers(ctx: BuildContext) -> List[str]:
         '  Abort',
         '',
         '_eid_done:',
+    ])
+
+    if has_logging:
+        lines.append('  !insertmacro _YPACK_DebugLog "[YPACK] ExistingInstall_DirLeave: EXIT (no conflict or after uninstall)"')
+
+    lines.extend([
         '  SetRegView lastused',
         '',
         'FunctionEnd',

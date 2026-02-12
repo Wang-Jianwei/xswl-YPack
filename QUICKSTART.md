@@ -59,6 +59,10 @@ This creates `installer.yaml` with sensible defaults.
 app:
   name: MyApp
   version: "1.0.0"
+  # Optional: control the PE resource ProductVersion/FileVersion (dotted-quad)
+  # Defaults to "0.0.0.0" when omitted — recommended to manage this in your
+  # release pipeline if you need SDK/PE-level versioning.
+  vi_product_version: "0.0.0.0"
   publisher: My Company
 
 install:

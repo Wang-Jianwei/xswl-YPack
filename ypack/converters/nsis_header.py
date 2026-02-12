@@ -5,6 +5,7 @@ NSIS script header generation — defines, includes, unicode, icons.
 from __future__ import annotations
 
 import os
+import re
 from typing import List, Optional
 
 from .context import BuildContext
@@ -42,6 +43,31 @@ def _escape_nsis_langstring(text: str) -> str:
     return text
 
 
+def _normalize_vi_product_version(version_str: Optional[str]) -> str:
+    """Normalize an optional version string into a VIProductVersion-compatible
+    dotted-quad (a.b.c.d) where each component is 0..65535.
+
+    If version_str is None or empty, returns "0.0.0.0".
+    Otherwise extracts up to 4 numeric components and clamps to valid range.
+
+    Examples:
+    - None -> "0.0.0.0"
+    - "1.2.3" -> "1.2.3.0"
+    - "2026.1.23.0" -> "2026.1.23.0"
+    """
+    if not version_str or not version_str.strip():
+        return "0.0.0.0"
+
+    # Extract numeric components
+    nums = [int(x) for x in re.findall(r"\d+", version_str)[:4]]
+    while len(nums) < 4:
+        nums.append(0)
+
+    # Clamp to 16-bit words for VS_FIXEDFILEINFO
+    parts = [min(max(p, 0), 65535) for p in nums]
+    return ".".join(str(p) for p in parts)
+
+
 
 def generate_header(ctx: BuildContext) -> List[str]:
     """Top-of-file defines, Unicode flag, MUI icon defines."""
@@ -64,6 +90,7 @@ def generate_header(ctx: BuildContext) -> List[str]:
         "; --- Application Information ---",
         f'!define APP_NAME "{cfg.app.name}"',
         f'!define APP_VERSION "{cfg.app.version}"',
+        f'!define APP_VERSION_VI "{_normalize_vi_product_version(cfg.app.vi_product_version)}"',
         f'!define APP_PUBLISHER "{cfg.app.publisher}"',
         f'!define APP_DESCRIPTION "{desc_value}"',
     ]
@@ -138,6 +165,15 @@ def generate_general_settings(ctx: BuildContext) -> List[str]:
     reg_view = ctx.effective_reg_view
     lines: List[str] = [
         "; --- General Settings ---",
+        "; --- Version Info (applies to installer and uninstaller stub) ---",
+        'VIProductVersion "${APP_VERSION_VI}"',
+        'VIAddVersionKey "FileVersion" "${APP_VERSION_VI}"',
+        'VIAddVersionKey "ProductVersion" "${APP_VERSION}"',
+        'VIAddVersionKey "ProductName" "${APP_NAME}"',
+        'VIAddVersionKey "CompanyName" "${APP_PUBLISHER}"',
+        'VIAddVersionKey "FileDescription" "${APP_NAME} Installer"',
+        'VIAddVersionKey "LegalCopyright" "Copyright (c) ${APP_PUBLISHER}"',
+        '',
         f'Name "${{APP_NAME}}"',
         f'OutFile "${{APP_NAME}}-${{APP_VERSION}}-Setup.exe"',
         f'InstallDir "{ctx.resolve(cfg.install.install_dir)}"',

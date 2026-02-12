@@ -187,6 +187,10 @@ python -m tools.yaml_to_mermaid installer.yaml --html installer.html
 app:
   name: "MyApp"                    # 必须 / required
   version: "1.0.0"                 # 版本号
+  # 可选：显式控制 Windows PE 资源中的 VIProductVersion（格式 a.b.c.d）。
+  # - 默认为 "0.0.0.0"（推荐将产品版本通过发布流程或 CI 管理）。
+  # - 如果需要在二进制资源层面设置版本（FileVersion/ProductVersion），请在 YAML 中填写此字段。
+  vi_product_version: "0.0.0.0"
   publisher: "My Company"          # 发布者
   branding: "Powered by..."        # 品牌文本（可选，默认使用 publisher）
   description: "App description"   # 描述

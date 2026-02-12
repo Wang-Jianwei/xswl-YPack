@@ -78,6 +78,7 @@ class AppInfo:
     install_icon: str = ""
     uninstall_icon: str = ""
     license: LangText = field(default_factory=LangText)
+    vi_product_version: Optional[str] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> AppInfo:
@@ -90,6 +91,7 @@ class AppInfo:
             install_icon=data.get("install_icon", ""),
             uninstall_icon=data.get("uninstall_icon", data.get("install_icon", "")),
             license=LangText.from_value(data.get("license", "")),
+            vi_product_version=data.get("vi_product_version"),
         )
 
 
