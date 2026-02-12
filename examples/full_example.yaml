@@ -15,6 +15,9 @@
 app:
   name: "MyApp"                                   # 应用名称（必需）
   version: "1.2.3"                                # 版本号（字符串）
+  vi_product_version: "1.2.3.0"                   # 可选：显式设置用于 Windows PE 资源的 VIProductVersion（格式 a.b.c.d）。
+                                                  #  - 如果省略，生成器将在 NSIS 中使用默认值 "0.0.0.0"（推荐将产品版本由发布流程控制）。
+                                                  #  - 如果需要与安装包/卸载程序中的 ProductVersion 映射，填写清晰的 dotted-quad 值。
   publisher: "Example Co."                        # 发布者/公司
   branding: "Example Co. - Quality Software"      # 品牌文本（安装程序中显示的品牌信息）
   description:                                    # 应用描述（用于安装界面等；支持多语言）

@@ -683,33 +683,53 @@ def generate_existing_install_helpers(ctx: BuildContext) -> List[str]:
     needs_version = bool(ei.version_check or ei.show_version_info)
     lines: List[str] = []
 
-    if needs_version and has_logging:
+    # Define _YPACK_DebugLog macro if it will be used anywhere in this helper section.
+    # This includes both version-checking code AND allow_multiple logging.
+    # Prevents "macro not found" errors when logging or version checking is needed.
+    if needs_version or ei.allow_multiple:
+        # Always define _YPACK_DebugLog macro (either with implementation if logging is on,
+        # or as empty stub if logging is off). This prevents "macro not found" errors
+        # when the function that calls it is generated.
         # Use a macro (inline expansion) instead of a Function to avoid
         # stack-interaction issues when called from nested helper functions
         # like _YPACK_GetFileProductVersion.
         # Use high registers ($R7-$R9) to minimize conflicts with function code.
-        lines.extend([
-            '',
-            '  ; ------------------------------------------------------------------',
-            '  ; Early debug log macro (independent from install log; works in .onInit)',
-            '  ; Writes to: $TEMP\\ypack-debug.log',
-            '  ; Implemented as !macro to avoid nested-function stack conflicts.',
-            '  ; Uses $R7/$R8 (high registers) to avoid conflicts with main code.',
-            '  ; ------------------------------------------------------------------',
-            '!macro _YPACK_DebugLog _msg',
-            '  Push $R7',
-            '  Push $R8',
-            '  StrCpy $R7 `${_msg}`',
-            '  FileOpen $R8 "$TEMP\\ypack-debug.log" a',
-            '  IntCmp $R8 0 +4',
-            '  FileSeek $R8 0 END',
-            '  FileWrite $R8 "$R7$\\r$\\n"',
-            '  FileClose $R8',
-            '  Pop $R8',
-            '  Pop $R7',
-            '!macroend',
-            '',
-        ])
+        
+        if has_logging:
+            lines.extend([
+                '',
+                '  ; ------------------------------------------------------------------',
+                '  ; Early debug log macro (independent from install log; works in .onInit)',
+                '  ; Writes to: $TEMP\\ypack-debug.log',
+                '  ; Implemented as !macro to avoid nested-function stack conflicts.',
+                '  ; Uses $R7/$R8 (high registers) to avoid conflicts with main code.',
+                '  ; ------------------------------------------------------------------',
+                '!macro _YPACK_DebugLog _msg',
+                '  Push $R7',
+                '  Push $R8',
+                '  StrCpy $R7 `${_msg}`',
+                '  FileOpen $R8 "$TEMP\\ypack-debug.log" a',
+                '  IntCmp $R8 0 +4',
+                '  FileSeek $R8 0 END',
+                '  FileWrite $R8 "$R7$\\r$\\n"',
+                '  FileClose $R8',
+                '  Pop $R8',
+                '  Pop $R7',
+                '!macroend',
+                '',
+            ])
+        else:
+            # Logging disabled: define empty stub macro to prevent "macro not found" errors
+            lines.extend([
+                '',
+                '  ; ------------------------------------------------------------------',
+                '  ; Debug log macro stub (logging disabled)',
+                '  ; ------------------------------------------------------------------',
+                '!macro _YPACK_DebugLog _msg',
+                '  ; (logging disabled)',
+                '!macroend',
+                '',
+            ])
 
     if needs_version:
         lines.extend([
